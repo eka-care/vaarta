@@ -37,11 +37,31 @@ class ContextResolutionService:
         self.bucket_name = os.getenv("S3_VADED_BUCKET_NAME", "voice-records")
 
     async def resolve(self, context: dict, b_id: str) -> ResolvedContext:
+        """Resolve a transaction's context dict. Never raises, and never
+        returns None.
+
+        The previous version ended in a bare ``except: pass``, so ANY error
+        returned None instead of a ResolvedContext. Callers test
+        ``if resolved_context and resolved_context.warnings``, so a None also
+        threw away the warnings that would have explained the failure: the run
+        structured with no context and nothing anywhere said why. Degrade to an
+        empty result with a warning instead.
+        """
+        result = ResolvedContext()
+        if not context:
+            return result
+        if not isinstance(context, dict):
+            logger.warning(
+                "context is not a dict; ignoring",
+                context_type=type(context).__name__,
+                severity="medium",
+            )
+            result.warnings.append(
+                f"context has unexpected type {type(context).__name__}"
+            )
+            return result
+
         try:
-            result = ResolvedContext()
-            if not context:
-                return result
-            
             past_sessions = context.get("past_sessions") or []
             for past_session in past_sessions:
                 if isinstance(past_session, dict):
@@ -58,10 +78,28 @@ class ContextResolutionService:
             documents = context.get("documents") or []
             for document_id in documents:
                 self._resolve_document(document_id, result)
+        except Exception as e:
+            logger.error(
+                "context resolution failed",
+                error=f"{type(e).__name__}: {e}",
+                exc_info=True,
+                severity="high",
+            )
+            result.warnings.append(f"context resolution failed: {e}")
 
-            return result
-        except Exception as _:
-            pass
+        # One line per run saying whether context actually made it through --
+        # the question "did it pick up the context?" should be answerable from
+        # the logs without a debugger.
+        logger.info(
+            "context resolved",
+            requested_documents=len(context.get("documents") or []),
+            requested_past_sessions=len(context.get("past_sessions") or []),
+            resolved_documents=len(result.documents),
+            resolved_past_sessions=len(result.past_sessions),
+            warnings=len(result.warnings),
+        )
+        return result
+
     
     def _resolve_past_session(
         self, session_id: str, result: ResolvedContext,session_date: any,b_id:str
@@ -125,7 +163,22 @@ class ContextResolutionService:
                 return
             
             if not text:
-                return 
+                # The document row exists and the object exists, but it is
+                # empty -- which is exactly what document creation writes
+                # before the client PUTs the real content. Silently returning
+                # here is what made "context is not picked up" invisible.
+                logger.warning(
+                    "context document is empty; nothing to attach",
+                    document_id=document_id,
+                    key=document_path,
+                    severity="medium",
+                )
+                result.warnings.append(
+                    f"Context document is empty (content not saved to storage "
+                    f"yet): {document_id}"
+                )
+                return
+
             
             result.documents.append(
                 ContextDocumentItem(

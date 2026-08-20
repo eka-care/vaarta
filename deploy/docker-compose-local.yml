@@ -120,6 +120,28 @@ services:
       mc ls local &&
       echo 'buckets ready'"
 
+  # --- mock identity provider, opt-in -----------------------------------------
+  # docker compose -f deploy/docker-compose-local.yml --profile mockidp up -d mockidp
+  #
+  # Lets the whole login flow be tested without an account at the real provider.
+  # Deliberately strict: it rejects a form-encoded token body and a
+  # "Bearer "-prefixed userinfo header, so a regression away from the real
+  # provider's quirks fails here instead of passing quietly.
+  #
+  # Two different URLs are needed for one provider entry, because the hops
+  # have different callers:
+  #   authorization_endpoint -> the BROWSER follows it  -> http://localhost:9500
+  #   token/userinfo         -> the API container calls -> http://mockidp:9500
+  mockidp:
+    image: python:3.11-slim
+    profiles: ["mockidp"]
+    restart: unless-stopped
+    command: ["python", "/mock/mock_oauth_provider.py", "--port", "9500"]
+    volumes:
+      - ../scripts/mock_oauth_provider.py:/mock/mock_oauth_provider.py:ro
+    ports:
+      - "127.0.0.1:9500:9500"
+
 volumes:
   pgdata:
   storage:

@@ -31,15 +31,19 @@ export const usePastSessionsHistory = ({
   // Search state
   const isSearching = searchQuery.trim().length > 0;
 
-  // Filter sessions by title when searching (titles live in session_details,
-  // available once a session's details are in the store)
+  // Filter sessions by title when searching. Same fallback as the list row:
+  // the store first (fresh renames), then the title the /history response
+  // already carries — otherwise search only ever matched sessions that had
+  // been opened this visit.
   const filteredSessions = useMemo(() => {
     if (!isSearching) return [];
 
     const query = searchQuery.toLowerCase().trim();
     return allSessions.filter((session) => {
       const title = (
-        (sessionV2ContentById[session.txn_id]?.session_details?.title as string | undefined) || ''
+        (sessionV2ContentById[session.txn_id]?.session_details?.title as string | undefined) ||
+        session.session_details?.title ||
+        ''
       ).toLowerCase();
       return title.includes(query);
     });
