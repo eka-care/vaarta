@@ -622,7 +622,7 @@ function buildDocumentHtml(
   });
   const defaultHeaderHtml = `<div class="print-header-frame print-brand-header">
       <div class="print-brand-left">
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACXklEQVR42mNQjP/PMJQxw6gHhpEHLIB4CxD/J4BXAbHuYPGAPBA/J8LRuPAtIBYaCA/IUuBoXJiHXh64QAPHw/AOWnqAhQgHvAbifCCWwKJfDogrgfgnEeZQ3QNGBCz0JCMm4wiYKUEtD+BzvDsVSpJkPOaLUeoBVjxJhdplOlnJiRxDV9CwYsJWQFwn1wPnyHB8NBDPBOKpQOxDpieukxILpJTzr/AY9AVPErhIheRkR6oHiE2LmiSU8aR4AD1AaknxgBwWyz1IzHi4MCORHviLpq+KFA88JTL0cDnyDoH2ESMZSciEFA8QU0lxYlF3HIu6T2R44h8lmdiESM19JFjykQRPfMWibhcpHtiApvk5Do13SMykX4jwxFdqVGTomrNwaHyARW07ActwOVAXTywxUOoBYRwaF2JRu5QIC39Su9gl5AFSSgpiy/h/tGxOk2IQFxBfBuJrQMxPpYbbf0o7NBQZRgL+TQ3HUzMJXSXB0hcEHA9iM1PLA7gycRsWtfZUcjxVMzGuYhRbU6GFio4nuxgltiJ7hMUyNgocD8K/qFGREduUmEGCRc9JcBi2ym4/qR0aYhpz/ES2Wd6REar/KO2RUdqcvgTE9ygs59H1mA6WDg2xRe0fNH3VtOpSGtGoS4meF+qo0al/TUKIDXinHoTPYDFoJQGLE4B4AXRoxZ/MZsYNagyr4EtKK2nYRrqIxb5rI3pokVBG9aSCw1NoObhLbGlDzjBiEr2G1wklJ2InOOShA1S/BmKCg15TTNtHJ/nImGZ9QYGjQWW+wGCZ6DYfihPdo2slRrwHAE7RSHNTvAY3AAAAAElFTkSuQmCC" width="30" height="30" alt="" />
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iOTUiIHZpZXdCb3g9IjAgMCAxMjggOTUiIGZpbGw9Im5vbmUiPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMS44OTkgLTM4LjIpIHNjYWxlKDEuMzM2KSI+PHBhdGggZD0iTTY0LjU2MTggMjguNTkyN0M2Mi43MTc3IDI4LjU5MjcgNjEuMjIyMiAzMC4wNjEgNjEuMjIyMiAzMS44NzU0VjU4LjEzNzNDNjEuMjIyMiA1OS45NTE2IDYyLjcxNzcgNjEuNDIgNjQuNTYxOCA2MS40MkM2Ni40MDYgNjEuNDIgNjcuOTAxNSA1OS45NTE2IDY3LjkwMTUgNTguMTM3M1YzMS44NzU0QzY3LjkwMTUgMzAuMDYxIDY2LjQwNiAyOC41OTI3IDY0LjU2MTggMjguNTkyN1pNODQuNTk5NyAzOC40NDA5QzgyLjc1NTYgMzguNDQwOSA4MS4yNjAxIDM5LjkwOTIgODEuMjYwMSA0MS43MjM2VjQ4LjI4OTFDODEuMjYwMSA1MC4xMDM0IDgyLjc1NTYgNTEuNTcxOCA4NC41OTk3IDUxLjU3MThDODYuNDQzOSA1MS41NzE4IDg3LjkzOTQgNTAuMTAzNCA4Ny45Mzk0IDQ4LjI4OTFWNDEuNzIzNkM4Ny45Mzk0IDM5LjkwOTIgODYuNDQzOSAzOC40NDA5IDg0LjU5OTcgMzguNDQwOVpNNDQuNTIzOSAzOC40NDA5QzQyLjY3OTggMzguNDQwOSA0MS4xODQzIDM5LjkwOTIgNDEuMTg0MyA0MS43MjM2VjQ4LjI4OTFDNDEuMTg0MyA1MC4xMDM0IDQyLjY3OTggNTEuNTcxOCA0NC41MjM5IDUxLjU3MThDNDYuMzY4MSA1MS41NzE4IDQ3Ljg2MzYgNTAuMTAzNCA0Ny44NjM2IDQ4LjI4OTFWNDEuNzIzNkM0Ny44NjM2IDM5LjkwOTIgNDYuMzY4MSAzOC40NDA5IDQ0LjUyMzkgMzguNDQwOVpNNzQuNTgwOCAzNS4xNTgxQzcyLjczNjYgMzUuMTU4MSA3MS4yNDExIDM2LjYyNjUgNzEuMjQxMSAzOC40NDA5VjUxLjU3MThDNzEuMjQxMSA1My4zODYyIDcyLjczNjYgNTQuODU0NSA3NC41ODA4IDU0Ljg1NDVDNzYuNDI0OSA1NC44NTQ1IDc3LjkyMDQgNTMuMzg2MiA3Ny45MjA0IDUxLjU3MThWMzguNDQwOUM3Ny45MjA0IDM2LjYyNjUgNzYuNDI0OSAzNS4xNTgxIDc0LjU4MDggMzUuMTU4MVpNNTQuNTQyOSAzNS4xNTgxQzUyLjY5ODcgMzUuMTU4MSA1MS4yMDMyIDM2LjYyNjUgNTEuMjAzMiAzOC40NDA5VjUxLjU3MThDNTEuMjAzMiA1My4zODYyIDUyLjY5ODcgNTQuODU0NSA1NC41NDI5IDU0Ljg1NDVDNTYuMzg3IDU0Ljg1NDUgNTcuODgyNSA1My4zODYyIDU3Ljg4MjUgNTEuNTcxOFYzOC40NDA5QzU3Ljg4MjUgMzYuNjI2NSA1Ni4zODcgMzUuMTU4MSA1NC41NDI5IDM1LjE1ODFaIiBmaWxsPSIjMjE1RkZGIi8+PHBhdGggZD0iTTYzLjg5OCA5OS40MDc4QzYxLjMwOTcgOTkuNDA3OCA1OS4wNjE5IDk5LjA3OCA1Ny4xNTQ4IDk4LjQxODRDNTUuMjQ3NiA5Ny43NTg3IDUzLjYxMjggOTYuNzAzMyA1Mi4yNTA2IDk1LjI1MjJMMTcuNTEyNSA1Ni4wNzA4QzE2LjU1ODkgNTQuOTQ5NSAxNi4yMTg0IDUzLjkyNyAxNi40OTA4IDUzLjAwMzZDMTYuNzYzMyA1Mi4wODAxIDE3LjY0ODggNTEuMzIxNSAxOS4xNDczIDUwLjcyNzlDMjAuNzgyIDUwLjEzNDIgMjIuOTYxNiA0OS44Mzc0IDI1LjY4NjIgNDkuODM3NEMyOC4wMDIxIDQ5LjgzNzQgMjkuODQxMSA1MC4xMDEyIDMxLjIwMzQgNTAuNjI4OUMzMi41NjU3IDUxLjE1NjYgMzMuODU5OCA1Mi4wODAxIDM1LjA4NTkgNTMuMzk5M0w2Ny4xNjc1IDkxLjY5MDJINjEuNDQ1OUw5NC4zNDQ5IDUzLjM5OTNDOTUuNDM0NyA1Mi4wODAxIDk2LjY2MDggNTEuMTU2NiA5OC4wMjMgNTAuNjI4OUM5OS41MjE1IDUwLjEwMTIgMTAxLjU2NSA0OS44Mzc0IDEwNC4xNTMgNDkuODM3NEMxMDYuNDY5IDQ5LjgzNzQgMTA4LjI0IDUwLjEzNDIgMTA5LjQ2NiA1MC43Mjc5QzExMC44MjggNTEuMzIxNSAxMTEuNjQ2IDUyLjA4MDEgMTExLjkxOCA1My4wMDM2QzExMi4xOTEgNTMuOTI3IDExMS43ODIgNTQuOTE2NSAxMTAuNjkyIDU1Ljk3MTlMNzUuNzQ5OCA5NS4yNTIyQzc0LjUyMzggOTYuNzAzMyA3Mi44ODkgOTcuNzU4NyA3MC44NDU2IDk4LjQxODRDNjguOTM4NCA5OS4wNzggNjYuNjIyNiA5OS40MDc4IDYzLjg5OCA5OS40MDc4WiIgZmlsbD0iIzIxNUZGRiIvPjwvZz48L3N2Zz4=" style="height:26px;width:auto;display:block" alt="Vaarta" />
         <div class="print-brand-text">
           <span class="print-brand-name">Vaarta</span>
           <span class="print-brand-tagline">Session notes</span>
@@ -1057,4 +1057,26 @@ export const buildDocumentPdfBuffer = async (
 
   const blob = await htmlToPdf(html);
   return { buffer: await blob.arrayBuffer(), fileName: toPdfFileName(fallbackName) };
+};
+
+// Renders the current document to PDF via the native HTML->PDF path and saves it, no print dialog.
+export const downloadDocument = async (args: {
+  documentId: string;
+  sessionId: string;
+  documentName?: string;
+}): Promise<boolean> => {
+  const pdf = await buildDocumentPdfBuffer(args.sessionId, args.documentId, args.documentName);
+  // Zero-length means the printer fell back to the print dialog; nothing to save.
+  if (!pdf || pdf.buffer.byteLength === 0) return false;
+
+  const url = URL.createObjectURL(new Blob([pdf.buffer], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = pdf.fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // Revoking synchronously can cancel the in-flight save.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return true;
 };

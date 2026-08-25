@@ -35,9 +35,13 @@ const DESCRIPTORS_BY_CAPABILITY: Record<keyof Platform, CapabilityId[]> = {
 const implementations: PlatformImplementations = familyImplementations;
 
 const activeCapabilities: ReadonlySet<CapabilityId> = new Set(
-  (Object.keys(implementations) as Array<keyof Platform>).flatMap(
-    (key) => DESCRIPTORS_BY_CAPABILITY[key] ?? []
-  )
+  (Object.keys(implementations) as Array<keyof Platform>)
+    .flatMap((key) => DESCRIPTORS_BY_CAPABILITY[key] ?? [])
+    // Every family registers `printer`, but only one with a native HTML->PDF path exports PDFs.
+    .filter(
+      (id) =>
+        id !== 'native-pdf-export' || typeof implementations.printer?.htmlToPdf === 'function'
+    )
 );
 
 /** The build-selected capability implementations. */

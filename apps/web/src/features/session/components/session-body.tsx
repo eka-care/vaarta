@@ -6,7 +6,8 @@ import SessionTabRow from '@/features/session/components/session-tab-row';
 import SessionContent from '@/features/session/components/session-content';
 import { AddOrConvertPopover } from '@/features/session/components/dialogs/add-or-convert-popover';
 import LinkPastSessionsDialog from '@/features/session/components/dialogs/link-past-sessions-dialog';
-import { printDocument } from '@/features/session/services/document-service';
+import { downloadDocument, printDocument } from '@/features/session/services/document-service';
+import { useCapabilities } from '@/platform';
 import type { SessionDocumentHandle } from './tabs/session-document';
 import { TabFooter } from './tabs/tab-footer';
 import {
@@ -143,6 +144,17 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
     ]
   );
 
+  // Download needs a native HTML->PDF path; web falls back to the print dialog's Save as PDF.
+  const canExportPdf = useCapabilities().has('native-pdf-export');
+
+  const handleDownloadDocument = useCallback(
+    async (documentId: string, documentName?: string) => {
+      const saved = await downloadDocument({ documentId, sessionId, documentName });
+      if (!saved) toast.error('Could not prepare the PDF. Try Print instead.');
+    },
+    [sessionId]
+  );
+
   // Copies active document markdown to clipboard
   const handleCopyDocument = useCallback(async () => {
     const md = documentRef.current?.getMarkdown() || activeDoc?.content;
@@ -208,9 +220,17 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
             const docId = streamDocIds.get(activeTab) || streamRef.current?.getDocumentId() || '';
             if (docId) await printDocument({ documentId: docId, sessionId });
           },
+          onDownload: canExportPdf
+            ? async () => {
+                const docId =
+                  streamDocIds.get(activeTab) || streamRef.current?.getDocumentId() || '';
+                if (docId) await handleDownloadDocument(docId);
+              }
+            : undefined,
           saveStatus: isDone ? saveStatus : 'generating',
           copyDisabled: !isDone,
           printDisabled: !isDone || !streamDocId,
+          downloadDisabled: !isDone || !streamDocId,
         });
       }
 
@@ -251,9 +271,15 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
           onPrint: async () => {
             await printDocument({ documentId: activeDoc.document_id, sessionId });
           },
+          onDownload: canExportPdf
+            ? async () => {
+                await handleDownloadDocument(activeDoc.document_id, activeDoc.document_name);
+              }
+            : undefined,
           saveStatus,
           copyDisabled: !hasContent,
           printDisabled: !hasContent,
+          downloadDisabled: !hasContent,
         });
       }
 
