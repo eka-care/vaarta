@@ -51,8 +51,7 @@ const SidebarTutorialButton = () => {
           align="start"
           sideOffset={10}
           collisionPadding={8}
-          className="flex w-49 flex-col justify-center gap-3 rounded-lg border-border p-4 shadow-md"
-          // "Got it" is the only way out — outside clicks and Escape must not dismiss it.
+          className="flex w-52 flex-col justify-center gap-3 rounded-lg border-border p-3 shadow-md"
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -65,7 +64,7 @@ const SidebarTutorialButton = () => {
           </div>
           <div className="flex w-full flex-col items-end justify-center">
             <Button
-              className="h-7 min-w-16 rounded-lg px-2 py-1.5 text-xs font-medium leading-4"
+              className="h-7 min-w-16 rounded-lg px-2 py-1.5 text-xs font-medium leading-4 cursor-pointer"
               onClick={acknowledgeHint}
             >
               Got it

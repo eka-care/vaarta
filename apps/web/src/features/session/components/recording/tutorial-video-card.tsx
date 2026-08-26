@@ -23,7 +23,7 @@ function TutorialVideoCard() {
   if (!showCard) return null;
 
   return (
-    <div className="relative mb-4 flex w-80.5 max-w-full flex-col overflow-hidden rounded-lg border border-border bg-background shadow-sm transition-colors hover:bg-accent">
+    <div className="relative mb-4 flex w-80.5 max-w-full flex-col overflow-hidden rounded-lg border border-border bg-background shadow-md transition-colors hover:bg-accent">
       <button
         type="button"
         onClick={handleWatch}
