@@ -40,6 +40,11 @@ type TStore = {
   playAudioCues: boolean;
   setPlayAudioCues: (playAudioCues: boolean) => void;
 
+  tutorialCardDismissed: boolean;
+  tutorialHintPending: boolean;
+  dismissTutorialCard: () => void;
+  acknowledgeTutorialHint: () => void;
+
   warningMessage?: string;
   warningIcon?: React.FC;
   warningAction?: React.FC;
@@ -108,8 +113,6 @@ type TStore = {
     showForAllUsers?: boolean;
   }) => void;
   clearBannerInfo: () => void;
-
-
 
   autoStartRecording: boolean;
   setAutoStartRecording: (value: boolean) => void;

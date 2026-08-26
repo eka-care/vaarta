@@ -38,6 +38,7 @@ import {
 } from '@/shared-components/custom-tooltip';
 import { SidebarBottomPanel, SidebarPanelItem } from './sidebar-bottom-panel';
 import SidebarPromoBanner from './sidebar-promo-banner';
+import SidebarTutorialButton from './sidebar-tutorial-button';
 
 const CustomSidebar = () => {
   const {
@@ -544,6 +545,9 @@ const CustomSidebar = () => {
                 <CustomTooltipContent collisionPadding={8}>App download</CustomTooltipContent>
               </CustomTooltip>
             </WebOnly>
+
+            {/* Watch tutorial */}
+            <SidebarTutorialButton />
           </div>
         </div>
       </SidebarFooter>

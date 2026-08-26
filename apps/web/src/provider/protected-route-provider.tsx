@@ -23,7 +23,7 @@ type Props = {
 };
 
 // Routes that render without authentication — no whoami fetch or gating.
-const PUBLIC_ROUTES = ['/ekascribe', '/auth', '/download'];
+const PUBLIC_ROUTES = ['/ekascribe', '/auth', '/download', '/tutorial'];
 
 const isPublicRoute = (pathname: string): boolean =>
   PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(route + '/'));

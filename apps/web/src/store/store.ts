@@ -4,6 +4,7 @@ import { TAppConfig, TUserSelectedPreferences } from '@/constants/types';
 import { MODEL_TYPE, SESSION_PHASE } from '@/constants/enums';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { getStorage } from '@/platform';
+import { TUTORIAL_CARD_DISMISSED_KEY, TUTORIAL_HINT_PENDING_KEY } from '@/constants/tutorial';
 import type {
   SessionV2Ongoing,
   SessionV2Content,
@@ -114,6 +115,10 @@ const userInitialState = {
   // null == let the backend fall back to its env default model
   structuringModel: null as string | null,
   playAudioCues: false,
+  // Read straight from local storage: the persisted store is sessionStorage-backed, but a
+  // tutorial dismissal has to survive restarts.
+  tutorialCardDismissed: getStorage().local.get(TUTORIAL_CARD_DISMISSED_KEY) === 'true',
+  tutorialHintPending: getStorage().local.get(TUTORIAL_HINT_PENDING_KEY) === 'true',
   // Stale closures over the previous user's components — must not outlive a logout.
   refreshPastSessionsCallback: null,
   refreshLoggedInUserDetailsPromise: null,
@@ -155,7 +160,7 @@ const sessionStateStorage: StateStorage = {
 
 const useVoice2RxStore = create<TStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...storeInitialState,
 
       setWorkspaceID: (workspaceID) => set({ workspaceID }),
@@ -166,6 +171,19 @@ const useVoice2RxStore = create<TStore>()(
         set({ userLevelPreferences: settings }),
 
       setPlayAudioCues: (playAudioCues) => set({ playAudioCues }),
+
+      dismissTutorialCard: () => {
+        if (get().tutorialCardDismissed) return;
+        const storage = getStorage().local;
+        storage.set(TUTORIAL_CARD_DISMISSED_KEY, 'true');
+        storage.set(TUTORIAL_HINT_PENDING_KEY, 'true');
+        set({ tutorialCardDismissed: true, tutorialHintPending: true });
+      },
+
+      acknowledgeTutorialHint: () => {
+        getStorage().local.remove(TUTORIAL_HINT_PENDING_KEY);
+        set({ tutorialHintPending: false });
+      },
 
       setWarningInfo: (warningInfo) =>
         set({

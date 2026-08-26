@@ -1,9 +1,12 @@
 import { Layers, NotebookPen, PenLine } from 'lucide-react';
 import Image from 'next/image';
+import TutorialVideoCard from './tutorial-video-card';
 
 function TranscriptIdleState() {
   return (
     <div className="flex-1 h-full flex flex-col items-center justify-center gap-8 relative px-4">
+      <TutorialVideoCard />
+
       <div className="flex flex-col items-center gap-5">
         <div className="flex flex-col items-center gap-2 text-center">
           <h3 className="text-2xl font-semibold leading-8 text-[#1A1A1A] max-w-[330px]">

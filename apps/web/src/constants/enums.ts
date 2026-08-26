@@ -79,6 +79,7 @@ export enum MIXPANEL_EVENT_TYPE {
   ADD_TRANSCRIPT = 'add_transcript',
   MICROPHONE_CLICKS = 'microphone_clicks',
   WHATS_NEW = 'whats_new',
+  WATCH_TUTORIAL = 'watch_tutorial',
 }
 
 export enum SESSION_PHASE {
