@@ -18,7 +18,7 @@ import { MIXPANEL_EVENT_NAME } from '@/constants/enums';
 
 initEkaScribe(EKA_SCRIBE_DEFAULT_CONFIG);
 
-const noSidebarRoutes = ['/ekascribe', '/auth', '/logged-out', '/download'];
+const noSidebarRoutes = ['/ekascribe', '/auth', '/logged-out', '/download', '/tutorial'];
 
 const ScreenContainer = ({ children }: { children: React.ReactNode }) => {
   useBeforeUnload();
