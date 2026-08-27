@@ -27,7 +27,6 @@ import DownloadAudioButton from '@/features/session/components/recording/downloa
 import { useSessionLifecycle } from '../hooks/use-session-lifecycle';
 import { useSessionView } from '../hooks/use-session-view';
 import SessionTitleField from './session-title-field';
-import ModelSelector from './model-selector';
 import { toast } from 'sonner';
 import ConfirmationDialog from '@/shared-components/dialog/confirmation-dialog';
 
@@ -143,7 +142,6 @@ const SessionHeader = ({
             disabled={phase === SESSION_PHASE.PROCESSING || !!isLimitExceeded}
           />
         </div>
-        <ModelSelector />
         {isOutput && (
           <div className="sm:hidden shrink-0">
             <DownloadAudioButton sessionID={sessionId} />

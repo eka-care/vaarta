@@ -75,14 +75,17 @@ data:
   MODEL_API_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
   ECHO_DEFAULT_TRANSCRIBER_MODEL: "/model/parrotlet-a"
 
-  # --- Models: LLM — Open WebUI fronting qwen -----------------------------
-  # OPENWEBUI_API_KEY lives in 02-secret.yaml.
-  ECHO_DEFAULT_LLM_PROVIDER: "openwebui"
-  ECHO_DEFAULT_LLM_MODEL: "qwen3-27b"
-  OPENWEBUI_BASE_URL: "https://bharatai.gov.in"
-  OPENWEBUI_ENABLE_THINKING: "false"
+  # --- Models: LLM — self-hosted structuring model -------------------------
+  ECHO_DEFAULT_LLM_PROVIDER: "openai_compatible"
+  ECHO_DEFAULT_LLM_MODEL: "eka-structuring-model"
+  ECHO_LLM_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
+  STRUCTURING_MODELS: "eka-structuring-model"
   ECHO_DEFAULT_LLM_TEMPERATURE: "0"
-  OPENWEBUI_VERIFY_SSL: "false"
+  # ECHO_DEFAULT_LLM_PROVIDER: "openwebui"
+  # ECHO_DEFAULT_LLM_MODEL: "qwen3-27b"
+  # OPENWEBUI_BASE_URL: "https://bharatai.gov.in"
+  # OPENWEBUI_ENABLE_THINKING: "false"
+  # OPENWEBUI_VERIFY_SSL: "false"
 
   # --- Prompts ------------------------------------------------------------
   ECHO_PROMPT_PROVIDER: "file"
