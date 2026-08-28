@@ -9,3 +9,7 @@ export const LOGOUT_DEV_URL = HOSTS.LOGIN_URL;
 export const SWITCH_WORKSPACE_PROD_URL = HOSTS.SWITCH_WORKSPACE_URL;
 export const SWITCH_WORKSPACE_DEV_URL = HOSTS.SWITCH_WORKSPACE_URL;
 
+export const MAC_APP_DOWNLOAD_URL = 'https://vaarta-app.ekacare.co/prod/latest/Vaarta.dmg';
+export const WINDOWS_APP_DOWNLOAD_URL =
+  'https://vaarta-app.ekacare.co/prod/latest/Vaarta%20Setup.exe';
+

@@ -2,6 +2,7 @@
 
 import { Button } from '@ui/src';
 import { ShieldCheck } from 'lucide-react';
+import { MAC_APP_DOWNLOAD_URL, WINDOWS_APP_DOWNLOAD_URL } from '@/constants/constant';
 
 function AppleIcon() {
   return (
@@ -41,11 +42,13 @@ const DownloadDesktopApp = () => {
 
         <div className="flex flex-col justify-items-center gap-1 w-full">
           <Button
-            disabled
+            asChild
             className="w-full inline-flex items-center gap-2 py-4 px-7 text-white border-none rounded-[10px] text-[0.9rem] font-semibold no-underline transition-all duration-200 relative overflow-hidden shadow-[0_2px_8px_rgba(33,95,255,0.25)]"
           >
-            {isMac ? <AppleIcon /> : <WindowsIcon />}
-            Download for {platformLabel}
+            <a href={isMac ? MAC_APP_DOWNLOAD_URL : WINDOWS_APP_DOWNLOAD_URL} download>
+              {isMac ? <AppleIcon /> : <WindowsIcon />}
+              Download for {platformLabel}
+            </a>
           </Button>
 
           <div className="flex justify-center items-center gap-1.5 text-xs text-muted-foreground">
