@@ -126,13 +126,17 @@ kubectl create secret generic eka-artifact-serving-secrets -n eka-care \
 
 kubectl apply -f eka-artifact-serving/deploy/10-deployment.yaml
 kubectl apply -f eka-artifact-serving/deploy/11-service.yaml
-kubectl apply -f eka-artifact-serving/deploy/12-virtualservice.yaml
+
+# Routing is NOT duplicated here -- it lives with the rest of the ingress.
+kubectl apply -f deploy/k8s/ingress/varta-gateway-full.yaml
 ```
 
-`12-virtualservice.yaml` **replaces** the `varta-vs` currently defined in
-`deploy/k8s/ingress/varta-gateway-full.yaml` — same name, same namespace, with
-the `/artifacts/` route added above the catch-all. The Gateway is untouched:
-same host, same TCL-owned TLS secret, no new certificate.
+The `/artifacts/` rule is one entry in the existing `varta-vs` in
+`deploy/k8s/ingress/varta-gateway-full.yaml`, above the catch-all. Keeping it
+there rather than in a second file matters: two files declaring the same
+VirtualService means whichever is applied last silently wins, while the other
+keeps looking correct. The Gateway is untouched — same host, same TCL-owned
+TLS secret, no new certificate.
 
 The Deployment carries a `hostAliases` entry for the object store. It is not
 optional — cluster DNS does not resolve that hostname, which is why
