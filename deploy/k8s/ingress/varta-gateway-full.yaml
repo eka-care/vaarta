@@ -24,10 +24,6 @@ spec:
       protocol: HTTPS
     tls:
       mode: SIMPLE
-      # TCL-owned secret in the istio-ingress namespace (eMudhra wildcard
-      # *.bharatai.gov.in, expires 2026-11-10). Gateway SDS resolves
-      # credentialName in the gateway pods' namespace, so tenant-namespace
-      # secrets are invisible here — renewals/changes go through TCL.
       credentialName: vaarta-server-tls
 ---
 # 4. Route to the app.
@@ -56,7 +52,7 @@ spec:
         prefix: /artifacts/
     - uri:
         exact: /artifacts
-    timeout: 0s
+    timeout: 3600s
     route:
     - destination:
         host: eka-artifact-serving.eka-care.svc.cluster.local

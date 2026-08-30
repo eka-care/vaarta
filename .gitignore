@@ -20,6 +20,7 @@ logs/
 *.egg-info/
 .next/
 /_to_delete/
+secret.yaml
 
 # Filled-in Kubernetes credentials. Only the *.yaml.example templates belong
 # in git; these patterns end in .yaml so they do not match the templates.

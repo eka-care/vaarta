@@ -27,28 +27,12 @@ spec:
         app.kubernetes.io/name: eka-artifact-serving
         app.kubernetes.io/part-of: ekascribe
     spec:
-      # REQUIRED. Cluster DNS does not resolve the object store's hostname --
-      # 10-api-deployment.yaml carries the same entry for the same reason.
-      # Without it every request here fails at name resolution.
       hostAliases:
         - ip: "100.78.1.101"
           hostnames:
             - "cdacchndstvals3arc.ipstorage.tatacommunications.com"
       imagePullSecrets:
         - name: ekascribe-regcred
-      # Same two nodes as ekascribe-api, expressed the same way the api
-      # expresses it -- a copy of the nodeAffinity block in
-      # deploy/k8s/10-api-deployment.yaml, not a reference to the api's pods.
-      # Nothing here depends on an api pod running, or on the api at all: this
-      # tier schedules, starts and serves on its own.
-      #
-      # Because it is a copy, it does NOT track changes to the api's pin. If
-      # that hostname list is ever edited, edit this one too.
-      #
-      # The trade, stated plainly: those api pods reserve 3500m CPU / 6656Mi
-      # each with Guaranteed QoS, so a large download now competes for CPU on
-      # the same box. Requests/limits below (200m/1000m, Burstable) keep this
-      # tier subordinate to the api under contention.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -61,7 +45,7 @@ spec:
                       - chncdocopwapp01w3-rvz6t-z2qff
       containers:
         - name: eka-artifact-serving
-          image: ekacare/ekascribe:artifact-latest
+          image: ekacare/eka-artifact-serving:v0.1.1
           imagePullPolicy: Always
           ports:
             - name: http
