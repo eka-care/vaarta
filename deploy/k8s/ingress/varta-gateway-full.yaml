@@ -44,7 +44,27 @@ spec:
   - vaarta.bharatai.gov.in
 
   http:
-  - route:
+  # /artifacts/* is the desktop-app release service (eka-artifact-serving).
+  # It must stay ABOVE the catch-all: Istio evaluates these in order and the
+  # last rule matches everything.
+  #
+  # timeout 0s because a 200MB installer over a clinic uplink would otherwise
+  # run into whatever request timeout this Istio version defaults to.
+  - name: artifacts
+    match:
+    - uri:
+        prefix: /artifacts/
+    - uri:
+        exact: /artifacts
+    timeout: 0s
+    route:
+    - destination:
+        host: eka-artifact-serving.eka-care.svc.cluster.local
+        port:
+          number: 8080
+  # Catch-all: the api, which also serves the web UI.
+  - name: api
+    route:
     - destination:
         host: ekascribe-api.eka-care.svc.cluster.local
         port:

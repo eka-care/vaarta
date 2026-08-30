@@ -37,7 +37,10 @@ kubectl get ns eka-care
 If it is missing, someone with cluster-scoped rights has to create it before
 anything below will apply.
 
-Push images next — `./deploy/push.sh <tag>` builds and pushes both api and web.
+Push images next — `./deploy/push.sh <tag>` builds and pushes the api image
+(it also carries the web bundle). On an existing cluster the same command
+applies `01-configmap.yaml` and rolls the deployment to the new tag; pass
+`--push-only` to push without touching the cluster.
 
 Create the two credentials directly against the cluster so nothing real lands
 in the repo. Use a Docker Hub **access token**, not your password:
@@ -102,7 +105,8 @@ kubectl -n eka-care port-forward svc/ekascribe-api 8000:8000
 
 Manifests default to `api-latest` with `imagePullPolicy: Always`
 so a fresh `apply` picks up whatever was pushed last. For anything you care
-about, pin the immutable sha tag — `deploy/push.sh` prints these commands:
+about, pin the immutable sha tag — `deploy/push.sh <tag>` does exactly this
+for you, and `--push-only` prints the command instead:
 
 ```bash
 kubectl -n eka-care set image deploy/ekascribe-api api=ekacare/ekascribe:api-1a2b3c4
