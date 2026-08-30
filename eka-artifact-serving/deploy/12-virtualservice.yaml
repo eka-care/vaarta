@@ -1,0 +1,46 @@
+# Routes /artifacts/ to this service. Everything else keeps going where it
+# already goes.
+#
+# This REPLACES the varta-vs defined in deploy/k8s/ingress/varta-gateway-full.yaml
+# (same name, same namespace) -- that is the one currently live. The Gateway
+# object itself is unchanged: same host, same TCL-owned TLS secret, no new
+# certificate needed.
+#
+#   kubectl apply -f 12-virtualservice.yaml
+#
+# NOTE: order matters. Istio evaluates http rules top to bottom and the last
+# rule matches everything, so /artifacts/ must stay above it.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: varta-vs
+  namespace: eka-care
+spec:
+  gateways:
+  - varta-gw
+  hosts:
+  - varta.bharatai.gov.in
+  - vaarta.bharatai.gov.in
+  http:
+  - name: artifacts
+    match:
+    - uri:
+        prefix: /artifacts/
+    - uri:
+        exact: /artifacts
+    # A 200MB installer over a slow clinic uplink will otherwise run into
+    # whatever request timeout this Istio version defaults to. Explicit 0
+    # so the answer does not depend on the version.
+    timeout: 0s
+    route:
+    - destination:
+        host: eka-artifact-serving.eka-care.svc.cluster.local
+        port:
+          number: 8080
+  # Catch-all: unchanged.
+  - name: api
+    route:
+    - destination:
+        host: ekascribe-api.eka-care.svc.cluster.local
+        port:
+          number: 8000

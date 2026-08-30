@@ -1,0 +1,115 @@
+# eka-artifact-serving: the public byte-serving tier.
+#
+# A separate Deployment from ekascribe-api -- its own image, its own lifecycle,
+# its own resource envelope -- but co-located on the api's nodes (see the
+# affinity block below).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eka-artifact-serving
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/name: eka-artifact-serving
+    app.kubernetes.io/part-of: ekascribe
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eka-artifact-serving
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eka-artifact-serving
+        app.kubernetes.io/part-of: ekascribe
+    spec:
+      # REQUIRED. Cluster DNS does not resolve the object store's hostname --
+      # 10-api-deployment.yaml carries the same entry for the same reason.
+      # Without it every request here fails at name resolution.
+      hostAliases:
+        - ip: "100.78.1.101"
+          hostnames:
+            - "cdacchndstvals3arc.ipstorage.tatacommunications.com"
+      imagePullSecrets:
+        - name: ekascribe-regcred
+      # Same two nodes as ekascribe-api, expressed the same way the api
+      # expresses it -- a copy of the nodeAffinity block in
+      # deploy/k8s/10-api-deployment.yaml, not a reference to the api's pods.
+      # Nothing here depends on an api pod running, or on the api at all: this
+      # tier schedules, starts and serves on its own.
+      #
+      # Because it is a copy, it does NOT track changes to the api's pin. If
+      # that hostname list is ever edited, edit this one too.
+      #
+      # The trade, stated plainly: those api pods reserve 3500m CPU / 6656Mi
+      # each with Guaranteed QoS, so a large download now competes for CPU on
+      # the same box. Requests/limits below (200m/1000m, Burstable) keep this
+      # tier subordinate to the api under contention.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - chncdocopwapp01w3-rvz6t-qwqvs
+                      - chncdocopwapp01w3-rvz6t-z2qff
+      containers:
+        - name: eka-artifact-serving
+          image: ekacare/ekascribe:artifact-latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ARTIFACTS_PREFIX
+              value: "artifacts"
+          envFrom:
+            # S3_ENDPOINT_URL, S3_BUCKET, AWS_REGION, LOG_LEVEL
+            - configMapRef:
+                name: ekascribe-config
+            # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (boto3 default chain)
+            - secretRef:
+                name: ekascribe-secrets
+            # ARTIFACTS_KEY (+ ARTIFACTS_KEY_NEXT during a rotation)
+            - secretRef:
+                name: eka-artifact-serving-secrets
+          readinessProbe:
+            # /readyz fails when the bucket or write key is missing, so a
+            # mis-mounted Secret never takes traffic.
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            # /healthz never touches the store: a store blip should surface as
+            # 5xx on the affected routes, not restart-loop the whole tier.
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            # Uploads spool here before going to the store. Sized for a couple
+            # of concurrent pushes; downloads never touch disk.
+            - name: spool
+              mountPath: /tmp
+      volumes:
+        - name: spool
+          emptyDir:
+            sizeLimit: 4Gi

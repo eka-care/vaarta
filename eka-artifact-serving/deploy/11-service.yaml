@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: eka-artifact-serving
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/name: eka-artifact-serving
+    app.kubernetes.io/part-of: ekascribe
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: eka-artifact-serving
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

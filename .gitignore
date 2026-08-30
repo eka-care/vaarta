@@ -42,7 +42,8 @@ deploy/secret.yaml
 # *.yaml.example templates. Never belongs in git.
 *.backup
 deploy/config-map.yaml
-# /data/storage snapshots taken by `deploy/push.sh --update-image`
+# Legacy /data/storage snapshots -- nothing takes these any more, but old
+# working copies may still have them lying around.
 deploy/backups/
 deploy/storage-*.tar.gz
 deploy/.DS_Store

@@ -27,8 +27,9 @@ secure context).
 ## Run on Kubernetes
 
 ```bash
-./deploy/push.sh <tag>          # build + push images
-kubectl apply -f deploy/k8s/    # deploy to namespace eka-care
+./deploy/push.sh <tag>          # build + push, apply the ConfigMap, roll out
+                                # (--push-only to push without deploying)
+kubectl apply -f deploy/k8s/    # first-time install of the rest of the manifests
 kubectl -n eka-care port-forward svc/ekascribe-api 8000:8000
 ```
 
