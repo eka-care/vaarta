@@ -186,13 +186,14 @@ def consume_refresh_token(raw: str, rotate: bool = True):
     Rotation is issue-then-retire, scoped to the ONE presented token:
 
     - valid + rotate   -> a replacement token is issued and returned FIRST;
-                          the presented token is then MARKED revoked+deleted
-                          (best-effort, in try/except -- a failed mark must
-                          never fail the refresh). The row is KEPT, not
-                          hard-deleted: a replayed spent token stays
-                          distinguishable from one that never existed, which
-                          "not in the db" could not tell us while debugging
-                          the desktop client.
+                          the presented token is then MARKED revoked with
+                          revoke_reason="rotated" (best-effort, in try/except
+                          -- a failed mark must never fail the refresh). The
+                          row is KEPT, not hard-deleted: a replayed spent
+                          token stays distinguishable from one that never
+                          existed, which "not in the db" could not tell us
+                          while debugging the desktop client. One flag gates
+                          (revoked); revoke_reason explains.
     - replayed spent   -> None, logged as "already rotated away".
     - unknown          -> None. Only this client is affected: the user's
                           other sessions (web + desktop coexist) keep their
@@ -227,16 +228,24 @@ def consume_refresh_token(raw: str, rotate: bool = True):
         )
         return None
     if int(row.get("revoked", 0)) == 1:
-        if int(row.get("deleted", 0)) == 1 or row.get("revoke_reason") == "rotated":
+        reason = row.get("revoke_reason", "")
+        if reason == "rotated":
             logger.warning(
                 "refresh rejected: token already rotated away %ss ago -- the "
                 "client is replaying a spent token instead of the one the "
                 "last refresh returned (user=%s)",
                 now - int(row.get("rotated_at", 0) or 0), row.get("username", ""),
             )
-        else:
+        elif reason == "logout":
             logger.warning(
                 "refresh rejected: token was revoked by logout (user=%s)",
+                row.get("username", ""),
+            )
+        else:
+            # rows revoked before revoke_reason existed
+            logger.warning(
+                "refresh rejected: token was revoked (no reason recorded; "
+                "pre-upgrade row) (user=%s)",
                 row.get("username", ""),
             )
         return None
@@ -258,8 +267,7 @@ def consume_refresh_token(raw: str, rotate: bool = True):
     try:
         table.update_item(
             {"token_hash": token_hash},
-            {"revoked": 1, "deleted": 1, "rotated_at": now,
-             "revoke_reason": "rotated"},
+            {"revoked": 1, "rotated_at": now, "revoke_reason": "rotated"},
             require_exists=False,
         )
     except Exception as exc:  # noqa: BLE001
