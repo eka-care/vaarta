@@ -158,7 +158,8 @@ def revoke_refresh_token(raw: str) -> None:
     try:
         get_table("refresh_tokens").update_item(
             {"token_hash": _hash_refresh(raw)},
-            {"revoked": 1, "rotated_at": int(time.time())},
+            {"revoked": 1, "rotated_at": int(time.time()),
+             "revoke_reason": "logout"},
             require_exists=False,
         )
     except Exception:
@@ -182,16 +183,21 @@ def revoke_all_refresh_tokens(username: str) -> None:
 def consume_refresh_token(raw: str, rotate: bool = True):
     """Validate a refresh token; returns (user, new_raw_refresh | None) or None.
 
-    Rotation is issue-then-delete, scoped to the ONE presented token:
+    Rotation is issue-then-retire, scoped to the ONE presented token:
 
     - valid + rotate   -> a replacement token is issued and returned FIRST;
-                          the presented token is then deleted (best-effort,
-                          inside try/except -- a failed delete must never fail
-                          the refresh, the old row just ages out at expiry).
-    - replayed/unknown -> None. Only this client is affected: the user's other
-                          sessions (web and desktop coexist) keep their own
-                          tokens untouched.
-    - expired          -> None (the dead row is deleted opportunistically).
+                          the presented token is then MARKED revoked+deleted
+                          (best-effort, in try/except -- a failed mark must
+                          never fail the refresh). The row is KEPT, not
+                          hard-deleted: a replayed spent token stays
+                          distinguishable from one that never existed, which
+                          "not in the db" could not tell us while debugging
+                          the desktop client.
+    - replayed spent   -> None, logged as "already rotated away".
+    - unknown          -> None. Only this client is affected: the user's
+                          other sessions (web + desktop coexist) keep their
+                          own tokens untouched.
+    - expired          -> None (row kept; expiry is evident from the row).
     - revoked (logout) -> None.
 
     Deliberately NO grace window and NO cross-session revocation (2026-09-01):
@@ -219,16 +225,20 @@ def consume_refresh_token(raw: str, rotate: bool = True):
             "refresh rejected: token expired %ss ago (user=%s)",
             now - int(row.get("expires_at", 0)), row.get("username", ""),
         )
-        try:
-            table.delete_item({"token_hash": token_hash})
-        except Exception:  # noqa: BLE001 -- cleanup only
-            pass
         return None
     if int(row.get("revoked", 0)) == 1:
-        logger.warning(
-            "refresh rejected: token was revoked by logout (user=%s)",
-            row.get("username", ""),
-        )
+        if int(row.get("deleted", 0)) == 1 or row.get("revoke_reason") == "rotated":
+            logger.warning(
+                "refresh rejected: token already rotated away %ss ago -- the "
+                "client is replaying a spent token instead of the one the "
+                "last refresh returned (user=%s)",
+                now - int(row.get("rotated_at", 0) or 0), row.get("username", ""),
+            )
+        else:
+            logger.warning(
+                "refresh rejected: token was revoked by logout (user=%s)",
+                row.get("username", ""),
+            )
         return None
 
     user = get_table("users").get_item({"username": row.get("username", "")}) or {}
@@ -241,13 +251,21 @@ def consume_refresh_token(raw: str, rotate: bool = True):
 
     if not rotate:
         return user, None
+    # Issue the replacement BEFORE retiring the presented token: if issuing
+    # fails the old token is untouched and the client can retry; if the mark
+    # fails the old token merely lingers valid until its own expiry.
     new_raw = issue_refresh_token(user["username"], user.get("uuid", ""))
     try:
-        table.delete_item({"token_hash": token_hash})
+        table.update_item(
+            {"token_hash": token_hash},
+            {"revoked": 1, "deleted": 1, "rotated_at": now,
+             "revoke_reason": "rotated"},
+            require_exists=False,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "rotated refresh token could not be deleted (user=%s): %s -- "
-            "it stays valid until its expiry",
+            "rotated refresh token could not be marked revoked (user=%s): %s "
+            "-- it stays valid until its expiry",
             row.get("username", ""), exc,
         )
     return user, new_raw
