@@ -113,9 +113,7 @@ def _session_response(user: dict, refresh_raw: Optional[str]) -> Response:
     kwargs = _cookie_kwargs()
     response.set_cookie(key=s.auth_cookie_name, value=access, **kwargs)
     if refresh_raw:
-        response.set_cookie(
-            key=s.auth_refresh_cookie_name, value=refresh_raw, **kwargs
-        )
+        response.set_cookie(key=s.auth_refresh_cookie_name, value=refresh_raw, **kwargs)
     return response
 
 
@@ -221,7 +219,6 @@ def signup(body: SignupRequest):
 def login(body: LoginRequest):
     from argon2.exceptions import VerifyMismatchError
 
-
     username = body.username.strip().lower()
     user = get_table("users").get_item({"username": username}) or {}
     stored_hash = user.get("password_hash", "")
@@ -256,7 +253,13 @@ def refresh(body: Optional[RefreshRequest] = None, request: Request = None):
     raw = (body.refresh_token if body else None) or (
         request.cookies.get(s.auth_refresh_cookie_name, "") if request else ""
     )
+    logger.info(
+        "refresh token requested",
+        cookies=str(request.cookies) if request else "",
+        body=str(body) if body else "",
+    )
     result = consume_refresh_token(raw)
+    logger.info("refresh token consumed", result=str(result))
     if not result:
         return ResponseFormatter.error(
             code="invalid_refresh_token",
