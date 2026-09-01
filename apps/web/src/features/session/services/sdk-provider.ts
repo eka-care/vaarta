@@ -10,7 +10,7 @@ import { SESSION_PHASE } from '@/constants/enums';
 import { tracker } from '@/analytics';
 import { getFlavour, getHost, getAuthTokens } from '@/platform';
 import { initTransport } from '@/transport';
-import setEnv from '@/fetch-client/helper';
+import { applyRefreshedTokens } from '@/utils/auth-token-sync';
 import type { IpcBridge } from '@/transport';
 
 export type EkaScribeSDK = ReturnType<typeof getEkaScribeInstance>;
@@ -73,7 +73,7 @@ function createInstance() {
     if (getHost() === 'desktop') {
       const tokens = await getAuthTokens()?.refresh();
       if (tokens?.accessToken) {
-        setEnv({ auth_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+        await applyRefreshedTokens(tokens);
         return tokens.accessToken;
       }
       tracker.error(new Error('SDK token refresh failed'), {

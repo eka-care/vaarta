@@ -20,7 +20,6 @@ import { tracker, setSessionContext } from '@/analytics';
 import { ERROR_CODE } from '@eka-care/ekascribe-ts-sdk';
 import { getSDK } from '../services/sdk-provider';
 import { discardAndCleanup } from '../utils/discard-session';
-import { handleUserLogout } from '@/utils/user-auth-logout-utility-methods';
 
 function teardownSessionMixing() {
   getPlatform().audioCapture?.teardownSessionMixing?.();
@@ -127,24 +126,16 @@ export function useSessionLifecycle() {
           );
 
           if (!response.success || !response.data) {
-            if (!response.success) {
-              // 403 → session expired; log out to our own login page (native logout on desktop)
-              if (response.error.httpStatus === 403) {
-                store.clearSessionV2Content(sessionId);
-                void handleUserLogout();
-                return null;
-              }
-
-              // txn_limit_exceeded → show upgrade modal
-              if (
-                response.error.httpStatus === 400 &&
-                response.error.code === 'txn_limit_exceeded'
-              ) {
-                store.setSessionV2Content(sessionId, {
-                  is_limit_exceeded: true,
-                });
-                return sessionId;
-              }
+            // txn_limit_exceeded → show upgrade modal
+            if (
+              !response.success &&
+              response.error.httpStatus === 400 &&
+              response.error.code === 'txn_limit_exceeded'
+            ) {
+              store.setSessionV2Content(sessionId, {
+                is_limit_exceeded: true,
+              });
+              return sessionId;
             }
 
             const errorMessage = !navigator.onLine
@@ -169,7 +160,7 @@ export function useSessionLifecycle() {
                 api_code: apiCode,
               },
             });
-            return sessionId;
+            return null;
           }
 
           const { session_id, upload_url, expires_at, created_at } = response.data;
@@ -217,7 +208,7 @@ export function useSessionLifecycle() {
               message: 'Something went wrong. Please try again.',
             },
           });
-          return sessionId;
+          return null;
         } finally {
           activeCreatePromise = null;
         }

@@ -1,8 +1,8 @@
 import { GET_CLIENT_ID, GET_EKA_HOST, GET_AUTH_TOKEN } from './helper';
-import setEnv from './helper';
 import { getTransport } from '@/transport';
 import { getHost, getAuthTokens } from '@/platform';
-import { handleUserLogout } from '@/utils/user-auth-logout-utility-methods';
+import { notifyAuthDead } from '@/utils/auth-failure';
+import { applyRefreshedTokens } from '@/utils/auth-token-sync';
 import { tracker } from '@/analytics';
 
 function classifyService(url: string): string {
@@ -24,11 +24,10 @@ async function refreshToken(): Promise<boolean> {
   if (getHost() === 'desktop') {
     try {
       const tokens = await getAuthTokens()?.refresh();
-      if (tokens?.accessToken) {
-        setEnv({ auth_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-        return true;
-      }
-      return false;
+      if (!tokens?.accessToken) return false;
+
+      await applyRefreshedTokens(tokens);
+      return true;
     } catch {
       return false;
     }
@@ -51,18 +50,11 @@ async function refreshToken(): Promise<boolean> {
       }
     );
 
-    if (!response.ok) {
-      await handleUserLogout();
-      return false;
-    }
-
-    await response.json();
-  } catch (error) {
-    await handleUserLogout();
+    // Cookies are set by the response itself, so there is no token to propagate.
+    return response.ok;
+  } catch {
     return false;
   }
-
-  return true;
 }
 
 export default async function fetchWrapper(
@@ -108,9 +100,10 @@ export default async function fetchWrapper(
 
       if (refreshSuccess) {
         return await fetchWrapper(url, options, false);
-      } else {
-        throw new Error('Unable to refresh user token');
       }
+
+      notifyAuthDead();
+      throw new Error('Unable to refresh user token');
     }
 
     if (response.status >= 400) {
