@@ -21,6 +21,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from scribe_core.settings import get_settings
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 JWT_PAYLOAD_HEADER = "jwt-payload"
 
 
@@ -90,7 +94,6 @@ def verify_session_token(token: str, secret: str) -> dict:
     return jwt.decode(token, secret, algorithms=[SESSION_ALGO])
 
 
-ROTATION_GRACE_SECONDS = 60
 
 
 def cookie_domain() -> str | None:
@@ -155,7 +158,8 @@ def revoke_refresh_token(raw: str) -> None:
     try:
         get_table("refresh_tokens").update_item(
             {"token_hash": _hash_refresh(raw)},
-            {"revoked": 1, "rotated_at": int(time.time())},
+            {"revoked": 1, "rotated_at": int(time.time()),
+             "revoke_reason": "logout"},
             require_exists=False,
         )
     except Exception:
@@ -179,46 +183,100 @@ def revoke_all_refresh_tokens(username: str) -> None:
 def consume_refresh_token(raw: str, rotate: bool = True):
     """Validate a refresh token; returns (user, new_raw_refresh | None) or None.
 
-    - valid + rotate       -> old revoked (60s grace), new token issued
-    - valid within grace   -> accepted WITHOUT re-rotation (parallel requests
-                              keep their cookie; only the access token renews)
-    - revoked beyond grace -> REUSE detected: every session for the user is
-                              revoked; returns None
-    - expired / unknown    -> None
+    Rotation is issue-then-retire, scoped to the ONE presented token:
+
+    - valid + rotate   -> a replacement token is issued and returned FIRST;
+                          the presented token is then MARKED revoked with
+                          revoke_reason="rotated" (best-effort, in try/except
+                          -- a failed mark must never fail the refresh). The
+                          row is KEPT, not hard-deleted: a replayed spent
+                          token stays distinguishable from one that never
+                          existed, which "not in the db" could not tell us
+                          while debugging the desktop client. One flag gates
+                          (revoked); revoke_reason explains.
+    - replayed spent   -> None, logged as "already rotated away".
+    - unknown          -> None. Only this client is affected: the user's
+                          other sessions (web + desktop coexist) keep their
+                          own tokens untouched.
+    - expired          -> None (row kept; expiry is evident from the row).
+    - revoked (logout) -> None.
+
+    Deliberately NO grace window and NO cross-session revocation (2026-09-01):
+    a stale desktop replaying a rotated token must cost that desktop a
+    re-login, never the user's browser session. The trade: two parallel
+    refreshes with the same token race, the loser gets a 401 and retries with
+    the winner's cookie -- clients should single-flight their refresh.
     """
     import time
     from scribe_core.db import get_table
-
     if not raw:
+        logger.warning("refresh rejected: no token supplied (empty body field and no cookie)")
         return None
     table = get_table("refresh_tokens")
-    row = table.get_item({"token_hash": _hash_refresh(raw)})
+    token_hash = _hash_refresh(raw)
+    row = table.get_item({"token_hash": token_hash})
     if not row:
+        logger.warning(
+            "refresh rejected: unknown token (never issued, already rotated away, or cleaned up)"
+        )
         return None
     now = int(time.time())
     if int(row.get("expires_at", 0)) <= now:
+        logger.warning(
+            "refresh rejected: token expired %ss ago (user=%s)",
+            now - int(row.get("expires_at", 0)), row.get("username", ""),
+        )
         return None
-    in_grace = (
-        int(row.get("revoked", 0)) == 1
-        and int(row.get("rotated_at", 0)) > 0
-        and now - int(row.get("rotated_at", 0)) <= ROTATION_GRACE_SECONDS
-    )
-    if int(row.get("revoked", 0)) == 1 and not in_grace:
-        revoke_all_refresh_tokens(row.get("username", ""))
+    if int(row.get("revoked", 0)) == 1:
+        reason = row.get("revoke_reason", "")
+        if reason == "rotated":
+            logger.warning(
+                "refresh rejected: token already rotated away %ss ago -- the "
+                "client is replaying a spent token instead of the one the "
+                "last refresh returned (user=%s)",
+                now - int(row.get("rotated_at", 0) or 0), row.get("username", ""),
+            )
+        elif reason == "logout":
+            logger.warning(
+                "refresh rejected: token was revoked by logout (user=%s)",
+                row.get("username", ""),
+            )
+        else:
+            # rows revoked before revoke_reason existed
+            logger.warning(
+                "refresh rejected: token was revoked (no reason recorded; "
+                "pre-upgrade row) (user=%s)",
+                row.get("username", ""),
+            )
         return None
 
     user = get_table("users").get_item({"username": row.get("username", "")}) or {}
     if not user or not user.get("is_active", True):
+        logger.warning(
+            "refresh rejected: user missing or inactive (user=%s)",
+            row.get("username", ""),
+        )
         return None
 
-    if in_grace or not rotate:
+    if not rotate:
         return user, None
-    table.update_item(
-        {"token_hash": row["token_hash"]},
-        {"revoked": 1, "rotated_at": now},
-        require_exists=False,
-    )
-    return user, issue_refresh_token(user["username"], user.get("uuid", ""))
+    # Issue the replacement BEFORE retiring the presented token: if issuing
+    # fails the old token is untouched and the client can retry; if the mark
+    # fails the old token merely lingers valid until its own expiry.
+    new_raw = issue_refresh_token(user["username"], user.get("uuid", ""))
+    try:
+        table.update_item(
+            {"token_hash": token_hash},
+            {"revoked": 1, "rotated_at": now, "revoke_reason": "rotated"},
+            require_exists=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "rotated refresh token could not be marked revoked (user=%s): %s "
+            "-- it stays valid until its expiry",
+            row.get("username", ""), exc,
+        )
+    return user, new_raw
 
 
 class CookieAuthMiddleware(BaseHTTPMiddleware):
