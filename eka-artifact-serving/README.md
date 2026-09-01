@@ -73,6 +73,8 @@ latest.yml                      latest-mac.yml
 | `GET /artifacts/builds` | open | Versions present, and which are published. |
 | `GET /artifacts/channels/{channel}/download/{platform}` | open | Version-free download link. 302s to the current build. `win` / `mac` / `mac-zip`. |
 | `GET /artifacts/builds/{version}` | open | Files in one version. |
+| `POST /artifacts/models/chat/completions` | model key | Pass-through to LiteLLM. Both models live here. |
+| `GET /artifacts/models/models` | model key | Pass-through model list. |
 | `GET /healthz` `/readyz` | open | Liveness never touches the store; readiness checks config. |
 
 Reads are open because `electron-updater` carries no session. Writes take
@@ -114,6 +116,14 @@ S3 variables use the same names as the api, so `ekascribe-config` and
 | `ARTIFACTS_MAX_UPLOAD_BYTES` | default 1 GiB |
 | `ARTIFACTS_CHANNEL_TTL` | pointer cache seconds, default 30 |
 | `S3_ADDRESSING_STYLE` | unset. Set to `path` only if bucket operations start returning odd 404s. |
+| `MODEL_API_BASE_URL` | LiteLLM base, from `ekascribe-config`. Unset disables the proxy. |
+| `MODEL_PROXY_KEY` | gates `/artifacts/models/*`. Required for it — 503 without. |
+| `MODEL_PROXY_KEY_NEXT` | second valid key, for rotation. |
+| `MODEL_API_AUTH_TOKEN` | LiteLLM virtual key sent upstream. Optional. |
+| `MODEL_PROXY_ALLOWED_MODELS` | default mirrors `bharatnet/litellm/config.yaml`. Empty disables the check. |
+| `MODEL_PROXY_MAX_BODY_BYTES` | default 128 MiB |
+| `MODEL_PROXY_TIMEOUT` | upstream timeout seconds, default 960 — above LiteLLM's own 900 |
+| `MODEL_PROXY_INSPECT_BYTES` | body prefix scanned for `model`, default 64 KiB |
 
 ## Build and deploy
 
@@ -194,15 +204,72 @@ curl -fsS -X POST -H "Authorization: Bearer $KEY" \
   $BASE/channels/stable
 ```
 
+## The model proxy
+
+`/artifacts/models` stands in for LiteLLM's `/v1`, so any OpenAI-compatible
+client points at it directly:
+
+```python
+OpenAI(base_url="https://vaarta.bharatai.gov.in/artifacts/models",
+       api_key="<MODEL_PROXY_KEY>")
+```
+
+Two models sit behind it, both reached through chat completions —
+`eka-structuring-model` (Gemma, text) and `/model/parrotlet-a` (ASR, base64
+audio in an `input_audio` content part). `bharatnet/litellm/config.yaml` also
+lists `eka-agent-model`, which is not currently serving and is deliberately
+absent from the allowlist. Bringing a model back means adding it in both
+places; live upstream but missing here answers 403.
+
+Four things it deliberately does:
+
+**Enumerated routes, never `{path:path}`.** LiteLLM serves its admin API from
+the same origin as its inference API — `/key/generate`, `/model/new`,
+`/spend/logs`. A wildcard proxy would let anyone holding the proxy key mint a
+LiteLLM virtual key and then address the model directly, bypassing this
+service permanently. Adding a route is a deliberate act.
+
+LiteLLM runs with no `master_key` — `general_settings` in that config says so
+outright — so its management API is unauthenticated to anything that can reach
+the pod. That is precisely why the routes here are enumerated: a wildcard would
+publish an open admin API to the internet.
+
+**A separate key from `ARTIFACTS_KEY`.** That one is held by CI and publishes
+installers; this one spends GPU time on the client's network. A leak of either
+should not be a leak of both.
+
+**The caller's credential never goes upstream.** The proxy authenticates the
+client with `MODEL_PROXY_KEY`, then substitutes `MODEL_API_AUTH_TOKEN`, or
+sends none.
+
+**Bodies stream, and are inspected by prefix only.** A parrotlet request is
+mostly one base64 audio string; `json.loads` on 128 MB of it would materialise
+the payload twice over in a 512 Mi pod. Only the first `MODEL_PROXY_INSPECT_BYTES`
+are scanned, for the `model` key, which every OpenAI-compatible client emits
+first.
+
+Requires the `vaarta-model.bharatai.gov.in` `hostAliases` entry in
+`deploy/10-deployment.yaml` — cluster DNS does not resolve it, and without it
+every request answers 502.
+
 ## Tests
 
 ```bash
 pip install . httpx && python tests/smoke.py
+pip install . httpx uvicorn && python tests/smoke_models.py
 ```
 
-Stubs the object store in memory — no S3, no network, no cluster. Covers auth,
-path validation, the publish gate, relative-path resolution through a channel,
-byte ranges, the published-version freeze, and rollback.
+`smoke.py` stubs the object store in memory — no S3, no network, no cluster.
+Covers auth, path validation, the publish gate, relative-path resolution
+through a channel, byte ranges, the published-version freeze, and rollback.
+
+`smoke_models.py` runs a stub LiteLLM and covers auth separation between the
+two keys, the route allowlist (admin paths 404 without reaching upstream), the
+model allowlist, body limits, upstream credential replacement, and failure
+mapping. Its SSE check runs against a real uvicorn rather than `TestClient`:
+the in-process ASGI transport collects the response before returning it, so it
+reports identical timings whether the proxy streams or buffers, and cannot
+prove the thing that check exists to prove.
 
 ## Two things the store has never been asked for
 

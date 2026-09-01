@@ -11,6 +11,9 @@ dependencies = [
     # we get here too.
     "boto3>=1.38",
     "PyYAML>=6.0",
+    # The model proxy streams both directions; httpx is the only client in the
+    # stack that can stream a request body and an SSE response at once.
+    "httpx>=0.27",
 ]
 
 [build-system]

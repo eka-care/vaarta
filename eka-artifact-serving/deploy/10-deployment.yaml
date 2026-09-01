@@ -31,6 +31,14 @@ spec:
         - ip: "100.78.1.101"
           hostnames:
             - "cdacchndstvals3arc.ipstorage.tatacommunications.com"
+        # The LiteLLM front end behind /artifacts/models/. Cluster DNS does not
+        # resolve it either -- deploy/k8s/10-api-deployment.yaml carries the
+        # same entry for the same reason. Without it the proxy answers 502 on
+        # every request; with it, nothing else about the model path is needed,
+        # because MODEL_API_BASE_URL already arrives from ekascribe-config.
+        - ip: "10.185.27.69"
+          hostnames:
+            - "vaarta-model.bharatai.gov.in"
       imagePullSecrets:
         - name: ekascribe-regcred
       affinity:
@@ -45,7 +53,7 @@ spec:
                       - chncdocopwapp01w3-rvz6t-z2qff
       containers:
         - name: eka-artifact-serving
-          image: ekacare/eka-artifact-serving:v0.1.1
+          image: ekacare/eka-artifact-serving:v0.1.2
           imagePullPolicy: Always
           ports:
             - name: http
@@ -60,7 +68,8 @@ spec:
             # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (boto3 default chain)
             - secretRef:
                 name: ekascribe-secrets
-            # ARTIFACTS_KEY (+ ARTIFACTS_KEY_NEXT during a rotation)
+            # ARTIFACTS_KEY (+ ARTIFACTS_KEY_NEXT during a rotation),
+            # MODEL_PROXY_KEY (+ _NEXT) for /artifacts/models/
             - secretRef:
                 name: eka-artifact-serving-secrets
           readinessProbe:
