@@ -432,6 +432,23 @@ export function useSessionLifecycle() {
 
     teardownSessionMixing();
 
+    const audioDurationSeconds = Math.round(sessionContent?.session_duration ?? 0);
+    if (audioDurationSeconds > 0) {
+      const mergedAdditionalData = {
+        ...(sessionContent?.additional_data ?? {}),
+        audio_duration: audioDurationSeconds,
+      };
+      store.setSessionV2Content(sessionId, { additional_data: mergedAdditionalData });
+      with401Retry(
+        () =>
+          getSDK().sessions.patchSessionStatus(
+            { additional_data: mergedAdditionalData },
+            sessionId
+          ),
+        'patch audio duration'
+      ).catch(() => {});
+    }
+
     if (store.playAudioCues) {
       new Audio('/audio/end.mp3').play();
     }

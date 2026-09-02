@@ -65,6 +65,11 @@ const SidebarPastSessions = ({
   const v2Phase = useVoice2RxStore(
     (state) => state.sessionV2ContentById[state.sessionV2Ongoing.recording_session_id]?.phase
   );
+  const ongoingSessionTitle = useVoice2RxStore(
+    (state) =>
+      (state.sessionV2ContentById[state.sessionV2Ongoing.recording_session_id]?.session_details
+        ?.title as string | undefined) || ''
+  );
   const sessionV2ContentById = useVoice2RxStore((state) => state.sessionV2ContentById);
   const router = useRouter();
   const pathname = usePathname();
@@ -227,7 +232,7 @@ const SidebarPastSessions = ({
               </div>
               <div className="flex flex-col  gap-px flex-1 min-w-0">
                 <p className="text-xs truncate leading-4 capitalize font-medium text-[#1A1A1A]">
-                  New Session
+                  {ongoingSessionTitle || 'New Session'}
                 </p>
                 <div className="flex items-center justify-between gap-1">
                   <p className="text-xs leading-4 text-secondary-foreground">
@@ -282,14 +287,14 @@ const SidebarPastSessions = ({
 
                 const storePhase = sessionV2ContentById[session.txn_id]?.phase;
                 const storeDisplayStatus = storePhase
-                  ? V2_PHASE_TO_STATUS[storePhase] ?? null
+                  ? (V2_PHASE_TO_STATUS[storePhase] ?? null)
                   : null;
 
                 const effectiveProcessingStatus = isActiveRecording
                   ? V2_PHASE_TO_STATUS[v2Phase] || v2Phase
                   : isClickedSession
-                  ? 'analysing'
-                  : storeDisplayStatus || session.processing_status;
+                    ? 'analysing'
+                    : storeDisplayStatus || session.processing_status;
 
                 const sessionProcessingStatus = getOngoingSessionStatus({
                   processingStatus: effectiveProcessingStatus,
@@ -308,8 +313,8 @@ const SidebarPastSessions = ({
                       isSelectedSession
                         ? 'bg-[#E9EFFF]'
                         : isHovered || openDropdownId === session.txn_id
-                        ? 'bg-[#F5F5F5]'
-                        : 'hover:bg-[#F5F5F5]'
+                          ? 'bg-[#F5F5F5]'
+                          : 'hover:bg-[#F5F5F5]'
                     }`}
                     onClick={() => {
                       handleSessionClick({
@@ -391,7 +396,9 @@ const SidebarPastSessions = ({
                       </DropdownMenu>
                     </div>
 
-                    {isSelectedSession && <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-sm bg-primary" />}
+                    {isSelectedSession && (
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-sm bg-primary" />
+                    )}
                   </div>
                 );
               })}

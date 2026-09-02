@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, Timer } from 'lucide-react';
 import {
   CustomTooltip,
   CustomTooltipContent,
@@ -20,7 +20,11 @@ const DownloadAudioButton = ({ sessionID }: DownloadAudioButtonProps) => {
   const storeDuration = useVoice2RxStore(
     (s) => s.sessionV2ContentById[sessionID]?.session_duration || 0
   );
-  const sessionDuration = storeDuration || blobDuration;
+  const additionalDataDuration = useVoice2RxStore((s) => {
+    const value = s.sessionV2ContentById[sessionID]?.additional_data?.audio_duration;
+    return typeof value === 'number' ? value : Number(value) || 0;
+  });
+  const sessionDuration = storeDuration || blobDuration || additionalDataDuration;
 
   useEffect(() => {
     let isMounted = true;
@@ -87,7 +91,17 @@ const DownloadAudioButton = ({ sessionID }: DownloadAudioButtonProps) => {
     }
   };
 
-  if (!hasAudio) return null;
+  if (!hasAudio) {
+    if (sessionDuration <= 0) return null;
+
+    // Duration only — the recording is no longer available to download.
+    return (
+      <span className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-muted-foreground">
+        <Timer className="size-4" />
+        {convertSecondsToMinutes(sessionDuration)}
+      </span>
+    );
+  }
 
   return (
     <CustomTooltip>
@@ -105,13 +119,11 @@ const DownloadAudioButton = ({ sessionID }: DownloadAudioButtonProps) => {
           {isDownloadAudioButtonLoading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
-            <Download className="size-4" />
+            <Download className="size-4 text-primary" />
           )}
         </button>
       </CustomTooltipTrigger>
-      <CustomTooltipContent collisionPadding={8}>
-        Download recording
-      </CustomTooltipContent>
+      <CustomTooltipContent collisionPadding={8}>Download recording</CustomTooltipContent>
     </CustomTooltip>
   );
 };

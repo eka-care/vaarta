@@ -1,12 +1,17 @@
+// mm:ss, widening to hh:mm:ss
 const convertSecondsToMinutes = (duration: number) => {
-  const minutes = Math.floor(duration / 60)
-    .toFixed(0)
-    .toString()
-    .padStart(2, '0');
+  const totalSeconds = Math.max(0, Math.round(duration || 0));
 
-  const seconds = (duration % 60).toFixed(0).toString().padStart(2, '0');
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-  return `${minutes}:${seconds}`;
+  const mm = minutes.toString().padStart(2, '0');
+  const ss = seconds.toString().padStart(2, '0');
+
+  if (hours === 0) return `${mm}:${ss}`;
+
+  return `${hours.toString().padStart(2, '0')}:${mm}:${ss}`;
 };
 
 export default convertSecondsToMinutes;
