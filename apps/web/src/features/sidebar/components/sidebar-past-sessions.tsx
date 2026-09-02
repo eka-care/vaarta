@@ -268,10 +268,16 @@ const SidebarPastSessions = ({
               {dateSessions.map((session) => {
                 const { time } = formatDate(session.created_at);
                 const storeContent = sessionV2ContentById[session.txn_id];
-                // Title lives in session_details — available once the session's
-                // details are in the store (opened or created this visit).
+                // Title lives in session_details, which the /history row
+                // already carries. Prefer the store so a rename made during
+                // this visit shows without a refetch, then fall back to the
+                // list row. Reading ONLY the store is what made every
+                // not-yet-opened session render as "Session at HH:MM" until
+                // it was clicked.
                 const sessionTitle =
-                  (storeContent?.session_details?.title as string | undefined) || null;
+                  (storeContent?.session_details?.title as string | undefined) ||
+                  session.session_details?.title ||
+                  null;
 
                 // Check if pathname matches this session (navigation completed)
                 const isPathnameMatch = pathname === `/session/${session.txn_id}`;
