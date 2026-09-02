@@ -96,7 +96,7 @@ const DownloadAudioButton = ({ sessionID }: DownloadAudioButtonProps) => {
 
     // Duration only — the recording is no longer available to download.
     return (
-      <span className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-muted-foreground">
+      <span className="flex items-center gap-1 py-1 text-sm font-medium text-secondary-foreground">
         <Timer className="size-4" />
         {convertSecondsToMinutes(sessionDuration)}
       </span>
