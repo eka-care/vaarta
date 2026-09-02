@@ -61,6 +61,25 @@ spec:
           env:
             - name: ARTIFACTS_PREFIX
               value: "artifacts"
+            # botocore >=1.36 sends every multipart UploadPart as aws-chunked
+            # with a CRC32 trailer. This store rejects that trailer outright --
+            # "InvalidRequest: Missing checksum in trailer data" -- which is how
+            # the Vaarta 1.0.8 .dmg push 500'd. apps/api never hit it because it
+            # only ever calls put_object; UploadPart is a different code path.
+            # when_required keeps checksums for the operations that mandate them
+            # and drops them everywhere else, which is what this store expects.
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: "when_required"
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: "when_required"
+            # s3transfer runs 10 upload threads by default, and glibc hands each
+            # one its own malloc arena -- up to 8 x ncores of them, 64MB each on
+            # these 8-core nodes. Freed part buffers go back to the arena but the
+            # arena never goes back to the OS, so the heap ratchets: a pod that
+            # has served one release sits at ~340Mi anon while idle, against a
+            # baseline of ~155Mi. Two arenas caps that ratchet.
+            - name: MALLOC_ARENA_MAX
+              value: "2"
           envFrom:
             # S3_ENDPOINT_URL, S3_BUCKET, AWS_REGION, LOG_LEVEL
             - configMapRef:
@@ -91,12 +110,17 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
           resources:
+            # 512Mi was too tight for a tier whose job is 300MB installers: the
+            # 1.0.8 push OOMKilled a pod (exit 137) with ~340Mi of ratcheted heap
+            # plus ~100Mi of in-flight multipart buffers. Each w3 node has 14.05Gi
+            # allocatable against 6.75Gi of visible requests, so the extra 256Mi
+            # of request per replica is comfortably affordable.
             requests:
               cpu: 200m
-              memory: 256Mi
+              memory: 512Mi
             limits:
               cpu: 1000m
-              memory: 512Mi
+              memory: 1Gi
           volumeMounts:
             # Uploads spool here before going to the store. Sized for a couple
             # of concurrent pushes; downloads never touch disk.
