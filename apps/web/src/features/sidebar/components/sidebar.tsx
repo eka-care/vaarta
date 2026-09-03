@@ -21,7 +21,7 @@ import SidebarSearchBar from './sidebar-search-bar';
 import { VaartaLogoLottie } from '@/shared-components/vaarta-logo-lottie';
 import { useRouter } from 'next/navigation';
 import useVoice2RxStore from '@/store/store';
-import { getPlatform, getStorage, useAppUpdates, WebOnly, DesktopOnly } from '@/platform';
+import { getPlatform, getStorage, useAppUpdates, WebOnly, DesktopOnly, useHost } from '@/platform';
 import { useSidebar } from '@ui/src';
 import { usePastSessionsHistory } from '@/features/sidebar/hooks/use-past-session-history';
 import { useSessionLifecycle } from '@/features/session/hooks/use-session-lifecycle';
@@ -39,6 +39,8 @@ import {
 import { SidebarBottomPanel, SidebarPanelItem } from './sidebar-bottom-panel';
 import SidebarPromoBanner from './sidebar-promo-banner';
 import SidebarTutorialButton from './sidebar-tutorial-button';
+import SidebarDesktopAppPopup from './sidebar-desktop-app-popup';
+import { useDesktopAppPopup } from '@/features/sidebar/hooks/use-desktop-app-popup';
 
 const CustomSidebar = () => {
   const {
@@ -112,6 +114,19 @@ const CustomSidebar = () => {
 
   const footerRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
+
+  // Post-login desktop app popup — web only, dismissal tracked per browser tab
+  const host = useHost();
+  const desktopAppPopupRef = useRef<HTMLDivElement>(null);
+  const { isOpen: isDesktopAppPopupOpen, dismiss: dismissDesktopAppPopup } = useDesktopAppPopup(
+    desktopAppPopupRef,
+    { enabled: host === 'web' }
+  );
+
+  const handleDesktopAppPopupDownloadClick = useCallback(() => {
+    dismissDesktopAppPopup();
+    getPlatform().system?.openExternal(`${window.location.origin}/download`);
+  }, [dismissDesktopAppPopup]);
 
   useEffect(() => {
     const unsub = getPlatform().system?.onOpenUserDefaults?.(() => setIsUserDefaultsOpen(true));
@@ -386,6 +401,15 @@ const CustomSidebar = () => {
       {/* Bottom panels + icon bar */}
       <SidebarFooter className="gap-0 p-0">
         <div ref={footerRef} className="relative">
+          {/* Desktop app popup */}
+          {isDesktopAppPopupOpen && (
+            <SidebarDesktopAppPopup
+              ref={desktopAppPopupRef}
+              onDownloadClick={handleDesktopAppPopupDownloadClick}
+              onClose={dismissDesktopAppPopup}
+            />
+          )}
+
           {/* Profile panel */}
           {activePanel === 'profile' && (
             <SidebarBottomPanel
