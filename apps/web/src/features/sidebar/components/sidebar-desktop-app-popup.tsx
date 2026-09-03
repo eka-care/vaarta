@@ -54,7 +54,7 @@ const SidebarDesktopAppPopup = memo(
           </li>
         </ul>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <Button
             className="w-full h-8 rounded-lg text-xs font-medium cursor-pointer"
             onClick={onDownloadClick}
