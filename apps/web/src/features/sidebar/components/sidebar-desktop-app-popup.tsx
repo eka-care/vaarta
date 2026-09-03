@@ -19,7 +19,7 @@ const SidebarDesktopAppPopup = memo(
         ref={ref}
         role="dialog"
         aria-label="Get the Vaarta desktop app"
-        className="absolute left-40 bottom-12 w-[292px] z-50 flex flex-col gap-3 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-border p-3"
+        className="absolute left-40 bottom-12 w-[320px] z-50 flex flex-col gap-3 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-border p-3"
       >
         {/* Icon + close button */}
         <div className="flex items-start justify-between">
