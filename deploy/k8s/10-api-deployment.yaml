@@ -7,11 +7,6 @@ metadata:
     app.kubernetes.io/name: ekascribe-api
     app.kubernetes.io/part-of: ekascribe
 spec:
-
-  # 1, not 2, while chncdocopwapp01w3-rvz6t-qwqvs is excluded below: with only
-  # one schedulable node left there is nowhere for a second replica to add
-  # availability, and maxSurge 0 / maxUnavailable 1 means two replicas on one
-  # node buy nothing during a rollout either. Restore to 2 together with qwqvs.
   replicas: 1
 
   strategy:
@@ -43,39 +38,7 @@ spec:
         #     - "vaarta.bharatai.gov.in"                     
       imagePullSecrets:
         - name: ekascribe-regcred
-      # Pod AFFINITY to itself -- the deliberate inverse of the usual spread.
-      # The storage volume is single-node attach (Cinder without multiattach;
-      # Nova refuses the second node -- seen live 2026-08-11), so every api pod
-      # MUST land on the node that holds the attachment. `required`: a pod that
-      # cannot co-locate should stay Pending rather than schedule somewhere it
-      # can never mount the volume. The first pod (no peers anywhere) is the
-      # scheduler's documented self-affinity special case and places freely.
-      #
-      # The trade: no node-failure protection. That node takes both replicas
-      # and the volume down with it. Node HA needs RWX storage or
-      # STORAGE_BACKEND=s3, not scheduling changes.
-
-      # affinity:
-      #   podAffinity:
-      #     requiredDuringSchedulingIgnoredDuringExecution:
-      #       - topologyKey: kubernetes.io/hostname
-      #         labelSelector:
-      #           matchLabels:
-      #             app.kubernetes.io/name: ekascribe-api
-      # !! TEMPORARY - chncdocopwapp01w3-rvz6t-qwqvs is REMOVED, not retired !!
-      #
-      # Pod networking between qwqvs and chncdocopwapp01w1-mnqj7-qg65z is broken
-      # in both directions (verified 2026-09-03: two unrelated pods on qwqvs time
-      # out to a pod on qg65z, and a probe pod on qg65z times out to both api pods
-      # on qwqvs, while reaching z2qff and the other w1 nodes in ~2ms). The istio
-      # ingress gateway runs on qg65z, so any api pod scheduled on qwqvs is in the
-      # Service endpoints but unreachable from the gateway - which surfaces as
-      # intermittent "upstream connect error ... connection timeout" for roughly
-      # half of all requests rather than a clean failure.
-      #
-      # This is a workaround for a Calico fault on that node pair, NOT a decision
-      # about placement. Put qwqvs back the moment routing is fixed - the intended
-      # configuration is both w3 nodes with replicas: 2.
+      
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -86,10 +49,7 @@ spec:
                     values:
                       # - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
-      # The api opens its psycopg pool at import time, so a pod that starts
-      # before Postgres is accepting connections crashloops instead of
-      # retrying. Matters most on a whole-node restart, where `strategy:
-      # Recreate` gives this pod no surviving replica to fall back on.
+
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
@@ -145,13 +105,7 @@ spec:
               mountPath: /data/storage
             - name: logs
               mountPath: /data/logs
-          # PER POD -- half of the api tier's 7 vCPU / 13Gi budget, since
-          # replicas is 2. Change both together.
-          #
-          # requests == limits, so these pods get Guaranteed QoS: the capacity
-          # is actually reserved and the kubelet evicts them last under node
-          # pressure rather than first. The tradeoff is that the reservation is
-          # held whether or not the pipeline is busy.
+
           resources:
             requests:
               cpu: 3500m
