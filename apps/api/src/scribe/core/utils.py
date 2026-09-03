@@ -122,3 +122,25 @@ if __name__ == "__main__":
     print(f"S3 Protocol: {convert_to_s3_protocol(s3_url)}")
     print(f"Regular URL: {convert_to_s3_protocol(regular_url)}")
     print()
+
+
+def parse_additional_data(value):
+    """Normalise a transaction row's additional_data to a dict.
+
+    The current create-session flow stores it as a real JSON object; legacy
+    (eka-era) rows store it as a JSON-encoded STRING. Feeding the dict form to
+    orjson.loads raises "Input must be bytes, bytearray, memoryview, or str"
+    and 500s every status poll on a current-flow session -- accept both shapes
+    and degrade anything unparseable to {} instead of an exception.
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, (bytes, bytearray, memoryview, str)):
+        try:
+            import orjson
+
+            parsed = orjson.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}

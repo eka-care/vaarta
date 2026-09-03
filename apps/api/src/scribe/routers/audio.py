@@ -21,6 +21,7 @@ from typing import Optional
 import orjson
 
 from scribe.core.custom_logger import get_logger
+from scribe.core.utils import parse_additional_data
 
 from scribe.core.http import RequestHandler, ResponseFormatter
 from scribe.schemas import ErrorResponse, UploadType
@@ -81,7 +82,9 @@ async def upload_audio(
         )
         
         if session_data.get("additional_data", {}):
-            session_data["additional_data"] = orjson.loads(session_data["additional_data"])
+            session_data["additional_data"] = parse_additional_data(
+                session_data["additional_data"]
+            )
 
         # if user have already ended(committed) the session, then he can't upload any more audio.
         # if session processing have been already completed, then he can't upload any more audio.

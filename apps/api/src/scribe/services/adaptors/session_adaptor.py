@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from scribe.core.custom_logger import get_logger
+from scribe.core.utils import parse_additional_data
 from scribe.core.exceptions import BadRequestException, ResourceNotFoundException
 from scribe.services.session_utils import SESSION_DURATION_SECONDS, compute_session_expires_at, compute_upload_url
 from scribe.core.choices import (
@@ -302,7 +303,7 @@ class SessionAdaptor:
     async def get_transaction_status(self, session_id: str, b_id: str) -> Dict[str, Any]:
         transaction_data = self.transaction_service.get_transaction(session_id, b_id)
         if transaction_data.get("additional_data", {}):
-            transaction_data["additional_data"] = orjson.loads(
+            transaction_data["additional_data"] = parse_additional_data(
                 transaction_data["additional_data"]
             )
 
@@ -355,7 +356,7 @@ class SessionAdaptor:
     ) -> Dict[str, Any]:
         transaction_data = self.transaction_service.get_transaction(session_id, b_id)
         if transaction_data.get("additional_data", {}):
-            transaction_data["additional_data"] = orjson.loads(
+            transaction_data["additional_data"] = parse_additional_data(
                 transaction_data["additional_data"]
             )
 

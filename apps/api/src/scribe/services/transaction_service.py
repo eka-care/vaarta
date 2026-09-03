@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 import orjson
 from scribe.core.custom_logger import get_logger
+from scribe.core.utils import parse_additional_data
 from scribe.repositories.transaction_orm import TransactionORM
 from scribe.services.document_service import DocumentService
 from scribe.services.config_service import ConfigService
@@ -99,7 +100,7 @@ class TransactionService:
         # both cases need to be handled. so that lagecy and medalliance protocol both work.
         additional_data = prepared_data.get("additional_data")
         if additional_data:
-            additional_data_json = orjson.loads(additional_data)
+            additional_data_json = parse_additional_data(additional_data)
             transfer = additional_data_json.get("_protocol", {}).get("upload_type")
             if transfer == Transfer.NON_VADED.value:
                 # self._publish_to_sns_for_vadding(prepared_data, txn_id, b_id)
@@ -233,7 +234,9 @@ class TransactionService:
             # download prompts from s3 and add it to sqs_data["output_format_template"] if available.
             sqs_data.pop("request_templates", None)
             if sqs_data.get("additional_data"):
-                sqs_data["additional_data"] = orjson.loads(sqs_data["additional_data"])
+                sqs_data["additional_data"] = parse_additional_data(
+                    sqs_data["additional_data"]
+                )
             
             action = Action.STRUCTURING.value
             message = {
