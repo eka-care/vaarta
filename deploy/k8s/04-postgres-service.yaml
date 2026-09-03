@@ -17,8 +17,13 @@ metadata:
     app.kubernetes.io/part-of: ekascribe
 spec:
   clusterIP: None
+  # Points at ekascribe-postgres-v2, NOT ekascribe-postgres. The original
+  # StatefulSet is scaled to 0 (see 05-postgres-statefulset.yaml) and the live
+  # database is the one defined in 05a-postgres-v2.yaml. Reverting this selector
+  # without also scaling 05 back up leaves this Service with zero endpoints and
+  # takes the api down.
   selector:
-    app.kubernetes.io/name: ekascribe-postgres
+    app.kubernetes.io/name: ekascribe-postgres-v2
   ports:
     - name: postgres
       port: 5432

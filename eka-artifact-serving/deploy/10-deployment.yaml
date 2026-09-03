@@ -12,7 +12,10 @@ metadata:
     app.kubernetes.io/name: eka-artifact-serving
     app.kubernetes.io/part-of: ekascribe
 spec:
-  replicas: 2
+  # 1, not 2, while chncdocopwapp01w3-rvz6t-qwqvs is excluded below: only one
+  # node is schedulable, so a second replica adds no availability. Restore to 2
+  # together with qwqvs.
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -41,6 +44,18 @@ spec:
             - "vaarta-model.bharatai.gov.in"
       imagePullSecrets:
         - name: ekascribe-regcred
+      # !! TEMPORARY - chncdocopwapp01w3-rvz6t-qwqvs is REMOVED, not retired !!
+      #
+      # Pod networking between qwqvs and chncdocopwapp01w1-mnqj7-qg65z is broken
+      # in both directions (verified 2026-09-03). The istio ingress gateway runs
+      # on qg65z, so a pod on qwqvs sits in the Service endpoints while being
+      # unreachable from the gateway - surfacing as intermittent "upstream
+      # connect error ... connection timeout" on roughly half of requests
+      # through varta-vs, rather than a clean failure.
+      #
+      # Workaround for a Calico fault on that node pair, not a placement
+      # decision. deploy/k8s/10-api-deployment.yaml carries the identical change
+      # for the same reason - restore both together when routing is fixed.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -49,7 +64,7 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      - chncdocopwapp01w3-rvz6t-qwqvs
+                      # - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
       containers:
         - name: eka-artifact-serving

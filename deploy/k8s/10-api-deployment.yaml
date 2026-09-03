@@ -8,7 +8,11 @@ metadata:
     app.kubernetes.io/part-of: ekascribe
 spec:
 
-  replicas: 2
+  # 1, not 2, while chncdocopwapp01w3-rvz6t-qwqvs is excluded below: with only
+  # one schedulable node left there is nowhere for a second replica to add
+  # availability, and maxSurge 0 / maxUnavailable 1 means two replicas on one
+  # node buy nothing during a rollout either. Restore to 2 together with qwqvs.
+  replicas: 1
 
   strategy:
     type: RollingUpdate
@@ -58,6 +62,20 @@ spec:
       #         labelSelector:
       #           matchLabels:
       #             app.kubernetes.io/name: ekascribe-api
+      # !! TEMPORARY - chncdocopwapp01w3-rvz6t-qwqvs is REMOVED, not retired !!
+      #
+      # Pod networking between qwqvs and chncdocopwapp01w1-mnqj7-qg65z is broken
+      # in both directions (verified 2026-09-03: two unrelated pods on qwqvs time
+      # out to a pod on qg65z, and a probe pod on qg65z times out to both api pods
+      # on qwqvs, while reaching z2qff and the other w1 nodes in ~2ms). The istio
+      # ingress gateway runs on qg65z, so any api pod scheduled on qwqvs is in the
+      # Service endpoints but unreachable from the gateway - which surfaces as
+      # intermittent "upstream connect error ... connection timeout" for roughly
+      # half of all requests rather than a clean failure.
+      #
+      # This is a workaround for a Calico fault on that node pair, NOT a decision
+      # about placement. Put qwqvs back the moment routing is fixed - the intended
+      # configuration is both w3 nodes with replicas: 2.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -66,7 +84,7 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      - chncdocopwapp01w3-rvz6t-qwqvs
+                      # - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
       # The api opens its psycopg pool at import time, so a pod that starts
       # before Postgres is accepting connections crashloops instead of

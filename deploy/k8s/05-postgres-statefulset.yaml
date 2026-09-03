@@ -26,7 +26,12 @@ spec:
   # 1, and it cannot usefully be more. This is a plain postgres image with no
   # replication configured -- a second replica would initdb its own empty PVC
   # and serve a different database behind the same Service name.
-  replicas: 1
+  # 0 since 2026-09-03: superseded by ekascribe-postgres-v2 (05a), which runs
+  # on chncdocopwapp01w3-rvz6t-z2qff. This StatefulSet is kept at zero rather
+  # than deleted because its PVC data-ekascribe-postgres-0 still holds the
+  # original data and is the rollback path - deleting the StatefulSet with
+  # whenDeleted: Retain keeps the PVC, but keeping it here makes that explicit.
+  replicas: 0
   serviceName: ekascribe-postgres
   selector:
     matchLabels:

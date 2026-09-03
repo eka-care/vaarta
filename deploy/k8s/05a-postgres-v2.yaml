@@ -1,0 +1,141 @@
+# ekascribe-postgres-v2: the live database as of 2026-09-03.
+#
+# Created to move Postgres off chncdocopwapp01w1-mnqj7-qg65z, which cannot
+# reach chncdocopwapp01w3-rvz6t-qwqvs (Calico fault on that node pair). Data
+# was migrated by pg_dump/pg_restore; 18/18 tables and all sequences verified
+# identical to the original before the Service in 04 was repointed here.
+#
+# The original StatefulSet (05) is scaled to 0 and its PVC retained as the
+# rollback path. This is the instance the api actually talks to.
+---
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ekascribe-postgres-v2
+    app.kubernetes.io/part-of: ekascribe
+  name: ekascribe-postgres-v2
+  namespace: eka-care
+spec:
+  clusterIP: None
+  ports:
+  - name: postgres
+    port: 5432
+    protocol: TCP
+    targetPort: postgres
+  selector:
+    app.kubernetes.io/name: ekascribe-postgres-v2
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/name: ekascribe-postgres-v2
+    app.kubernetes.io/part-of: ekascribe
+  name: ekascribe-postgres-v2
+  namespace: eka-care
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ekascribe-postgres-v2
+  serviceName: ekascribe-postgres-v2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ekascribe-postgres-v2
+        app.kubernetes.io/part-of: ekascribe
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_USER
+          value: scribe
+        - name: POSTGRES_DB
+          value: scribe
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: ekascribe-secrets
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_INITDB_ARGS
+          value: --data-checksums
+        image: postgres:16-alpine
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - scribe
+            - -d
+            - scribe
+          failureThreshold: 6
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: postgres
+        ports:
+        - containerPort: 5432
+          name: postgres
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - scribe
+            - -d
+            - scribe
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: data
+          subPath: pgdata
+        - mountPath: /dev/shm
+          name: dshm
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        kubernetes.io/hostname: chncdocopwapp01w3-rvz6t-z2qff
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: dshm
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+      storageClassName: pv-provisioner-5k-iops
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+
