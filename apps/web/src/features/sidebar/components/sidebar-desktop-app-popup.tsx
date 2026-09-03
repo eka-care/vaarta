@@ -9,7 +9,6 @@ type SidebarDesktopAppPopupProps = {
   onClose: () => void;
 };
 
-// Floating card beside the sidebar footer promoting the desktop app after login.
 const SidebarDesktopAppPopup = memo(
   forwardRef<HTMLDivElement, SidebarDesktopAppPopupProps>(function SidebarDesktopAppPopup(
     { onDownloadClick, onClose },
@@ -20,7 +19,7 @@ const SidebarDesktopAppPopup = memo(
         ref={ref}
         role="dialog"
         aria-label="Get the Vaarta desktop app"
-        className="absolute left-40 bottom-12 w-[292px] z-50 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-border p-3"
+        className="absolute left-40 bottom-12 w-[292px] z-50 flex flex-col gap-3 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-border p-3"
       >
         {/* Icon + close button */}
         <div className="flex items-start justify-between">
@@ -37,13 +36,11 @@ const SidebarDesktopAppPopup = memo(
           </button>
         </div>
 
-        {/* Title */}
-        <p className="mt-3 text-[15px] font-semibold leading-snug text-[#1A1A1A]">
+        <p className="text-[15px] font-semibold leading-snug text-[#1A1A1A]">
           Get the Vaarta desktop app
         </p>
 
-        {/* Feature highlights */}
-        <ul className="mt-2.5 flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
           <li className="flex items-start gap-2 text-xs leading-snug text-[#1A1A1A]">
             <Video className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
             <span>
@@ -57,19 +54,18 @@ const SidebarDesktopAppPopup = memo(
           </li>
         </ul>
 
-        {/* Download CTA */}
-        <Button
-          className="mt-3 w-full h-8 rounded-lg text-xs font-medium cursor-pointer"
-          onClick={onDownloadClick}
-        >
-          See download options
-          <ExternalLink className="size-3.5" />
-        </Button>
-
-        {/* Platform availability note */}
-        <p className="mt-2 text-[10px] text-center text-[#767676]">
-          Available for Windows &amp; MacOS (Apple Silicon and Intel)
-        </p>
+        <div className="flex flex-col gap-2">
+          <Button
+            className="w-full h-8 rounded-lg text-xs font-medium cursor-pointer"
+            onClick={onDownloadClick}
+          >
+            See download options
+            <ExternalLink className="size-3.5" />
+          </Button>
+          <p className="text-[10px] text-center text-[#767676]">
+            Available for Windows &amp; MacOS (Apple Silicon and Intel)
+          </p>
+        </div>
       </div>
     );
   })
