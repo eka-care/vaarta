@@ -2,7 +2,7 @@
 
 import { Button } from '@ui/src';
 import { ShieldCheck } from 'lucide-react';
-import { MAC_APP_DOWNLOAD_URL, WINDOWS_APP_DOWNLOAD_URL } from '@/constants/constant';
+import { MAC_UNIVERSAL_APP_DOWNLOAD_URL, WINDOWS_APP_DOWNLOAD_URL } from '@/constants/constant';
 
 function AppleIcon() {
   return (
@@ -45,7 +45,7 @@ const DownloadDesktopApp = () => {
             asChild
             className="w-full inline-flex items-center gap-2 py-4 px-7 text-white border-none rounded-[10px] text-[0.9rem] font-semibold no-underline transition-all duration-200 relative overflow-hidden shadow-[0_2px_8px_rgba(33,95,255,0.25)]"
           >
-            <a href={isMac ? MAC_APP_DOWNLOAD_URL : WINDOWS_APP_DOWNLOAD_URL} download>
+            <a href={isMac ? MAC_UNIVERSAL_APP_DOWNLOAD_URL : WINDOWS_APP_DOWNLOAD_URL} download>
               {isMac ? <AppleIcon /> : <WindowsIcon />}
               Download for {platformLabel}
             </a>
