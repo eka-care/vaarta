@@ -11,8 +11,12 @@ spec:
   replicas: 1
 =======
 
+<<<<<<< HEAD
   replicas: 2
 >>>>>>> 3cc230f (Updated deployment)
+=======
+  replicas: 1
+>>>>>>> ef7689b (deploy: add the dev api tier, scale prod api to one replica)
 
   strategy:
     type: RollingUpdate
@@ -55,7 +59,7 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
+                      #- chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
 
       initContainers:
