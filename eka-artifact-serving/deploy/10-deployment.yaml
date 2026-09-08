@@ -64,11 +64,11 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      # - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
+                      #- chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
       containers:
         - name: eka-artifact-serving
-          image: ekacare/eka-artifact-serving:v0.1.2
+          image: ekacare/eka-artifact-serving:v0.1.3
           imagePullPolicy: Always
           ports:
             - name: http

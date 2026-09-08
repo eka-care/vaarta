@@ -133,7 +133,26 @@ r = c.get("/artifacts/channels/stable/download/mac", follow_redirects=False)
 check("mac -> dmg not zip", r.headers.get("location") == "/artifacts/builds/1.0.3/Vaarta-1.0.3.dmg", r.headers.get("location"))
 r = c.get("/artifacts/channels/stable/download/mac-zip", follow_redirects=False)
 check("mac-zip -> zip", r.headers.get("location") == "/artifacts/builds/1.0.3/Vaarta-1.0.3.zip", r.headers.get("location"))
+
+# Apple Silicon: a second, arm64-only dmg that no manifest names -- latest-mac.yml
+# must keep pointing at the universal build or Intel Macs follow the alias onto a
+# binary that will not launch (release-pipelines #10).
+r = c.get("/artifacts/channels/stable/download/mac-arm64", follow_redirects=False)
+check("mac-arm64 absent -> 404", r.status_code == 404, r.status_code)
+OBJ["artifacts/builds/1.0.3/Vaarta-arm64.dmg"] = (b"ARM64-DMG", "application/octet-stream")
+OBJ["artifacts/builds/1.0.3/Vaarta-arm64.dmg.blockmap"] = (b"BM", "application/octet-stream")
+r = c.get("/artifacts/channels/stable/download/mac-arm64", follow_redirects=False)
+check("mac-arm64 -> 302", r.status_code == 302, r.status_code)
+check("mac-arm64 -> arm64 dmg, not the blockmap",
+      r.headers.get("location") == "/artifacts/builds/1.0.3/Vaarta-arm64.dmg", r.headers.get("location"))
+r = c.get("/artifacts/channels/stable/download/mac", follow_redirects=False)
+check("mac still -> universal dmg",
+      r.headers.get("location") == "/artifacts/builds/1.0.3/Vaarta-1.0.3.dmg", r.headers.get("location"))
+check("arm64 dmg stayed out of the feed",
+      "arm64" not in c.get("/artifacts/channels/stable/latest-mac.yml").text)
+
 check("bad platform -> 404", c.get("/artifacts/channels/stable/download/atari").status_code == 404)
+check("error names mac-arm64", "mac-arm64" in c.get("/artifacts/channels/stable/download/atari").text)
 r = c.get("/artifacts/channels/stable/download/win")
 check("follows through to bytes", r.status_code == 200 and r.content == EXE, r.status_code)
 

@@ -1,0 +1,23 @@
+# The name here is load-bearing: SELF_URL in dev/10-api-deployment.yaml
+# resolves to ekascribe-api-dev.eka-care.svc.cluster.local. Renaming this
+# Service means updating that override to match.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ekascribe-api-dev
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/name: ekascribe-api-dev
+    app.kubernetes.io/part-of: ekascribe
+    app.kubernetes.io/environment: dev
+spec:
+  type: ClusterIP
+  # Selects ONLY the dev pods. The prod Service selects
+  # app.kubernetes.io/name: ekascribe-api, so the two never overlap.
+  selector:
+    app.kubernetes.io/name: ekascribe-api-dev
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,78 @@
+# DEV ingress for ekascribe-api-dev.
+#
+# A dedicated host rather than a path prefix on vaarta.bharatai.gov.in, on
+# purpose: Istio merges VirtualServices that bind the same host+gateway, and
+# ordering across separate VS resources follows creation time. varta-vs is 25d
+# old and its last rule is a catch-all, so any dev route added in a separate
+# file on that host would be shadowed by it. A separate host keeps dev in its
+# own file with no ordering coupling to prod.
+#
+# !! PREREQUISITES -- this does not serve until both exist !!
+#   1. DNS: vaarta-dev.bharatai.gov.in -> same ingress address as
+#      vaarta.bharatai.gov.in (100.78.69.4 at the time of writing).
+#   2. TLS: a secret named vaarta-dev-server-tls in the ingress gateway's
+#      namespace. The prod cert is issued for vaarta.bharatai.gov.in and will
+#      not match this SNI.
+#
+# Until DNS exists you can still exercise the whole path from a machine that
+# can reach the gateway:
+#   curl -k --resolve vaarta-dev.bharatai.gov.in:443:100.78.69.4 \
+#        https://vaarta-dev.bharatai.gov.in/healthz
+#
+# If you would rather not stand up a cert yet, delete the port 443 server below
+# and set httpsRedirect: false on port 80 -- HTTP-only dev, still needs DNS or
+# --resolve.
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: varta-dev-gw
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/part-of: ekascribe
+    app.kubernetes.io/environment: dev
+spec:
+  # Same shared ingress gateway workload as prod. Only the host differs.
+  selector:
+    istio: ingressgateway
+  servers:
+    - hosts:
+        - vaarta-dev.bharatai.gov.in
+      port:
+        name: http
+        number: 80
+        protocol: HTTP
+      tls:
+        httpsRedirect: false
+    #- hosts:
+    #    - vaarta-dev.bharatai.gov.in
+    #  port:
+    #    name: https
+    #    number: 443
+    #    protocol: HTTPS
+    #  tls:
+    #    mode: SIMPLE
+    #    credentialName: vaarta-dev-server-tls
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: varta-dev-vs
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/part-of: ekascribe
+    app.kubernetes.io/environment: dev
+spec:
+  gateways:
+    - varta-dev-gw
+  hosts:
+    - vaarta-dev.bharatai.gov.in
+  http:
+    # Single catch-all to the dev api. No /artifacts/ rule: eka-artifact-serving
+    # has no dev instance, and pointing dev at the prod artifact service would
+    # let a dev build publish to the real release channel.
+    - name: api-dev
+      route:
+        - destination:
+            host: ekascribe-api-dev.eka-care.svc.cluster.local
+            port:
+              number: 8000
