@@ -2,7 +2,7 @@ import { PlatformDownloadCta } from './platform-download-cta';
 
 export function DownloadHero() {
   return (
-    <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center justify-center gap-12 px-4 pb-16 pt-12 md:px-8 md:pb-[78px] md:pt-[88px] xl:px-16">
+    <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center justify-center gap-12 px-4 pb-16 pt-12 md:px-8 md:pb-22 md:pt-22 xl:px-16">
       <div className="flex flex-col items-center justify-center gap-4">
         <div className="flex items-center justify-center rounded-full border border-[#a2bafa] bg-background px-4 py-1">
           <p className="text-center text-sm font-medium leading-5 text-card-foreground">

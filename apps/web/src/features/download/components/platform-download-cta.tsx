@@ -1,53 +1,91 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
-import { Button } from '@ui/src';
-import { MAC_APP_DOWNLOAD_URL, WINDOWS_APP_DOWNLOAD_URL } from '@/constants/constant';
-import { useDesktopOS } from '../hooks/use-desktop-os';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@ui/src';
+import {
+  MAC_ARM_APP_DOWNLOAD_URL,
+  MAC_UNIVERSAL_APP_DOWNLOAD_URL,
+  WINDOWS_APP_DOWNLOAD_URL,
+} from '@/constants/constant';
+import { useDesktopOS, type DesktopOS } from '../hooks/use-desktop-os';
+import { AppleIcon } from './apple-icon';
 import { WindowsIcon } from './windows-icon';
 
-// Leads with the installer for the visitor's OS and offers the other one as the
-// sub-link, so a Windows visitor never has to hunt for their build.
+const MAC_ARM = {
+  label: 'Download for Mac (Apple Silicon)',
+  href: MAC_ARM_APP_DOWNLOAD_URL,
+  Icon: AppleIcon,
+};
+const MAC_INTEL = {
+  label: 'Download for Mac (Intel)',
+  href: MAC_UNIVERSAL_APP_DOWNLOAD_URL,
+  Icon: AppleIcon,
+};
+const WINDOWS = {
+  label: 'Download for Windows',
+  href: WINDOWS_APP_DOWNLOAD_URL,
+  Icon: WindowsIcon,
+};
+
+// A Mac visitor can't be probed for Intel vs Apple Silicon, so lead with Apple
+// Silicon and park every other build under "Other platforms".
+const BUILDS: Record<DesktopOS, { primary: typeof MAC_ARM; others: (typeof MAC_ARM)[] }> = {
+  mac: { primary: MAC_ARM, others: [MAC_INTEL, WINDOWS] },
+  windows: { primary: WINDOWS, others: [MAC_ARM, MAC_INTEL] },
+};
+
 export function PlatformDownloadCta() {
-  const os = useDesktopOS();
-  const isWindows = os === 'windows';
+  const { primary, others } = BUILDS[useDesktopOS()];
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-4">
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
       <div className="flex flex-col items-center gap-2">
         <Button asChild className="h-10 min-w-20 gap-1 rounded-lg px-3">
-          <a href={isWindows ? WINDOWS_APP_DOWNLOAD_URL : MAC_APP_DOWNLOAD_URL} download>
-            <span className="px-1 text-sm font-medium leading-6">
-              {isWindows ? 'Download for Windows' : 'Download for MacOS'}
-            </span>
-            {isWindows ? (
-              <WindowsIcon className="size-4" />
-            ) : (
-              // 16px icon box; the Apple mark itself is 12 x 14.05 inside it, per Figma.
-              <span className="relative block size-4">
-                <img
-                  src="/assets/download/apple.svg"
-                  alt=""
-                  className="absolute left-[12.5%] top-[4.17%] h-[87.8%] w-[75%]"
-                />
-              </span>
-            )}
+          <a href={primary.href} download>
+            <span className="px-1 text-sm font-medium leading-6">{primary.label}</span>
+            <primary.Icon className="size-4" />
           </a>
         </Button>
-        <a
-          href={isWindows ? MAC_APP_DOWNLOAD_URL : WINDOWS_APP_DOWNLOAD_URL}
-          download
-          className="text-center text-xs leading-4 text-muted-foreground hover:underline"
-        >
-          {isWindows ? 'Download for MacOS instead' : 'Download for Windows instead'}
-        </a>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-auto min-w-16 gap-0 rounded-lg px-1.5 py-0.5 text-secondary-foreground has-[>svg]:px-1.5"
+            >
+              <span className="px-1 text-sm font-medium leading-6">Other platforms</span>
+              <ChevronDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            collisionPadding={8}
+            align="center"
+            className="min-w-55 border-border shadow"
+          >
+            {others.map(({ label, href, Icon }) => (
+              <DropdownMenuItem key={label} asChild className="justify-between">
+                <a href={href} download>
+                  <span className="leading-5">{label}</span>
+                  <Icon className="size-4 text-popover-foreground" />
+                </a>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Button
         asChild
         variant="outline"
-        className="h-10 w-[194px] gap-1 rounded-lg px-3 text-primary hover:text-primary"
+        className="h-10 w-49 gap-1 rounded-lg px-3 text-primary hover:text-primary"
       >
         <Link href="/">
           <span className="px-1 text-sm font-medium leading-6">Try on web</span>
