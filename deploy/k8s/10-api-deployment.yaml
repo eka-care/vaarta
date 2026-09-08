@@ -7,7 +7,12 @@ metadata:
     app.kubernetes.io/name: ekascribe-api
     app.kubernetes.io/part-of: ekascribe
 spec:
+<<<<<<< HEAD
   replicas: 1
+=======
+
+  replicas: 2
+>>>>>>> 3cc230f (Updated deployment)
 
   strategy:
     type: RollingUpdate
@@ -38,7 +43,10 @@ spec:
         #     - "vaarta.bharatai.gov.in"                     
       imagePullSecrets:
         - name: ekascribe-regcred
+<<<<<<< HEAD
       
+=======
+>>>>>>> 3cc230f (Updated deployment)
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -47,7 +55,7 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      # - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
+                      - chncdocopwapp01w3-rvz6t-qwqvs   # re-enable when Calico is fixed
                       - chncdocopwapp01w3-rvz6t-z2qff
 
       initContainers:
