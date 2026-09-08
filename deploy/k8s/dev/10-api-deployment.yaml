@@ -1,0 +1,154 @@
+# ekascribe-api -- DEV
+#
+# Deliberately in the SAME namespace as prod (eka-care) so it can consume the
+# prod ConfigMap, Secret and imagePullSecret by reference, per instruction --
+# no copied credentials, nothing duplicated to drift or leak. Everything that
+# would collide is suffixed -dev instead.
+#
+# !! READ THIS BEFORE SENDING REAL TRAFFIC !!
+# Sharing ekascribe-config + ekascribe-secrets means this dev pod inherits
+# ECHO_PG_HOST / ECHO_PG_DATABASE / DATABASE_URL from prod -- it talks to the
+# PROD Postgres, and dev code can write to (or migrate) live patient data.
+# That is what "same config and secrets as prod" implies. To isolate the DB
+# without giving up shared credentials, add overrides to the `env:` block
+# below (they take precedence over envFrom) pointing at a separate database on
+# the same server, e.g. ECHO_PG_DATABASE: scribe_dev + a matching DATABASE_URL.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ekascribe-api-dev
+  namespace: eka-care
+  labels:
+    app.kubernetes.io/name: ekascribe-api-dev
+    app.kubernetes.io/part-of: ekascribe
+    app.kubernetes.io/environment: dev
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ekascribe-api-dev
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ekascribe-api-dev
+        app.kubernetes.io/part-of: ekascribe
+        app.kubernetes.io/environment: dev
+    spec:
+      # Same entries as prod -- cluster DNS does not resolve these hosts.
+      hostAliases:
+        - ip: "10.185.27.69"
+          hostnames:
+            - "vaarta-model.bharatai.gov.in"
+        - ip: "10.185.27.77"
+          hostnames:
+            - "bharatai.gov.in"
+        - ip: "100.78.1.101"
+          hostnames:
+            - "cdacchndstvals3arc.ipstorage.tatacommunications.com"
+      imagePullSecrets:
+        - name: ekascribe-regcred
+      # Pinned to qwqvs for the same reason prod is: the Calico pod overlay
+      # between chncdocopwapp01w3-rvz6t-z2qff and the ingress gateway's node
+      # (chncdocopwapp01w1-mnqj7-qg65z) is broken in both directions as of
+      # 2026-09-04, so a pod on z2qff is in the Service endpoints but
+      # unreachable from the gateway. Note this fault has MOVED once already
+      # (it was qwqvs that was cut off on 2026-09-03) -- re-verify which node
+      # the gateway can actually reach before trusting this pin.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - chncdocopwapp01w3-rvz6t-qwqvs
+                      #- chncdocopwapp01w3-rvz6t-z2qff   # unreachable from gateway
+      # The api opens its psycopg pool at import time, so a pod that starts
+      # before Postgres is accepting connections crashloops instead of retrying.
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h ekascribe-postgres -p 5432 -U scribe -d scribe; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      containers:
+        - name: api
+          # Same tag as prod today. Point this at a feature build to actually
+          # use the environment:
+          #   kubectl set image deploy/ekascribe-api-dev api=ekacare/ekascribe:<tag> -n eka-care
+          image: ekacare/ekascribe:api-latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: ekascribe-config
+            - secretRef:
+                name: ekascribe-secrets
+          # Explicit env wins over envFrom, so these override the prod values
+          # for keys that must not be shared.
+          env:
+            - name: ENV
+              value: "dev"
+            # SELF_URL in the prod ConfigMap resolves to the PROD Service. Left
+            # unset it would make this pod generate callback/upload URLs that
+            # point at prod. Must track the Service name in 11-api-service.yaml.
+            - name: SELF_URL
+              value: "http://ekascribe-api-dev.eka-care.svc.cluster.local:8000"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: storage
+              mountPath: /data/storage
+            - name: logs
+              mountPath: /data/logs
+          # Roughly a third of prod's envelope -- enough to run, small enough
+          # that dev never competes with prod for the node. requests == limits
+          # for Guaranteed QoS, same as every other pod on these nodes.
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+      volumes:
+        - name: storage
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
