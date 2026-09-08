@@ -57,6 +57,17 @@ _PLATFORM = {
     "mac-zip": ("latest-mac.yml", (".zip",)),
 }
 
+# Aliases resolved by listing the version's own files instead of reading a
+# manifest. The Apple Silicon dmg is deliberately absent from latest-mac.yml --
+# naming it there would offer an arm64-only build to the Intel Macs on this
+# channel (release-pipelines #10) -- so there is no manifest entry to resolve it
+# from, and matching ".dmg" against latest-mac.yml would hand back the universal
+# build instead. Matched on the stored filename, which the app repo pins through
+# -c.mac.artifactName.
+_STORE_PLATFORM = {
+    "mac-arm64": re.compile(r"arm64.*\.dmg$", re.IGNORECASE),
+}
+
 _CONTENT_TYPES = {
     ".yml": "text/yaml",
     ".yaml": "text/yaml",
@@ -241,6 +252,17 @@ def get_channel_file(channel: str, filename: str, request: Request):
     return _stream_key(s.builds_key(version, filename), request, cache, filename)
 
 
+def _match_stored(version: str, pattern: "re.Pattern[str]") -> str | None:
+    """First stored filename for `version` matching `pattern`, if any.
+
+    For builds no manifest names -- see _STORE_PLATFORM.
+    """
+    s = get_settings()
+    prefix = s.builds_prefix(version)
+    names = sorted(k[len(prefix):] for k in store.list_keys(prefix))
+    return next((n for n in names if pattern.search(n)), None)
+
+
 @router.get("/channels/{channel}/download/{platform}")
 def download_latest(channel: str, platform: str):
     """Version-free download link: /artifacts/channels/stable/download/win
@@ -251,9 +273,11 @@ def download_latest(channel: str, platform: str):
     """
     s = get_settings()
     _check_channel(channel)
-    if platform not in _PLATFORM:
+    if platform not in _PLATFORM and platform not in _STORE_PLATFORM:
         raise HTTPException(
-            status_code=404, detail=f"platform must be one of: {', '.join(_PLATFORM)}"
+            status_code=404,
+            detail="platform must be one of: "
+            + ", ".join((*_PLATFORM, *_STORE_PLATFORM)),
         )
 
     payload = _read_channel(channel)
@@ -263,23 +287,33 @@ def download_latest(channel: str, platform: str):
     if not _VERSION.match(version):
         raise HTTPException(status_code=500, detail="channel pointer is malformed")
 
-    manifest, exts = _PLATFORM[platform]
-    raw = store.get_bytes(s.builds_key(version, manifest))
-    if not raw:
-        raise HTTPException(status_code=404, detail=f"{version} has no {manifest}")
-    try:
-        doc = yaml.safe_load(raw) or {}
-    except yaml.YAMLError:
-        raise HTTPException(status_code=500, detail=f"{manifest} is not valid yaml")
+    if platform in _STORE_PLATFORM:
+        match = _match_stored(version, _STORE_PLATFORM[platform])
+        if not match:
+            raise HTTPException(
+                status_code=404, detail=f"{version} has no {platform} build"
+            )
+    else:
+        manifest, exts = _PLATFORM[platform]
+        raw = store.get_bytes(s.builds_key(version, manifest))
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"{version} has no {manifest}")
+        try:
+            doc = yaml.safe_load(raw) or {}
+        except yaml.YAMLError:
+            raise HTTPException(
+                status_code=500, detail=f"{manifest} is not valid yaml"
+            )
 
-    names = [str((e or {}).get("url", "")) for e in (doc.get("files") or [])]
-    if doc.get("path"):
-        names.append(str(doc["path"]))
-    match = next((n for n in names if n.lower().endswith(exts)), None)
-    if not match:
-        raise HTTPException(
-            status_code=404, detail=f"{version} has no {'/'.join(exts)} in {manifest}"
-        )
+        names = [str((e or {}).get("url", "")) for e in (doc.get("files") or [])]
+        if doc.get("path"):
+            names.append(str(doc["path"]))
+        match = next((n for n in names if n.lower().endswith(exts)), None)
+        if not match:
+            raise HTTPException(
+                status_code=404,
+                detail=f"{version} has no {'/'.join(exts)} in {manifest}",
+            )
 
     return RedirectResponse(
         url=f"/artifacts/builds/{version}/{match}",
