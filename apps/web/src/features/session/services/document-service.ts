@@ -1031,19 +1031,60 @@ export const buildPrintPreviewHtml = async (): Promise<string | null> => {
   return buildDocumentHtml(contentHtml, hf, 'preview', getCompactPrintSetting());
 };
 
+// "10-09-2026" from epoch-seconds or a date string; today's date when the value is unusable.
+function toFileNameDate(raw: string): string {
+  const asNumber = Number(raw);
+  const parsed =
+    raw && !isNaN(asNumber) && asNumber > 0 ? new Date(asNumber * 1000) : new Date(raw);
+  const date = isNaN(parsed.getTime()) ? new Date() : parsed;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}-${month}-${date.getFullYear()}`;
+}
+
+// Session titles and document names are free text with no length limit, so each part is capped
+// well under the 255-char filename limit macOS and Windows enforce — the date must survive.
+const MAX_FILE_NAME_PART = 40;
+
+function toFileNamePart(value?: string): string {
+  const slug = (value || '')
+    .replace(/\.pdf$/i, '')
+    .replace(/[^\w]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (slug.length <= MAX_FILE_NAME_PART) return slug;
+
+  const clipped = slug.slice(0, MAX_FILE_NAME_PART).replace(/-+$/, '');
+  // Back off to the last whole word, unless that would leave a stub (one very long word).
+  const lastWordEnd = clipped.lastIndexOf('-');
+  const cutIsCleanBreak = slug[MAX_FILE_NAME_PART] === '-';
+  return cutIsCleanBreak || lastWordEnd < MAX_FILE_NAME_PART / 2
+    ? clipped
+    : clipped.slice(0, lastWordEnd);
+}
+
+// "<Session-Title>-<Template-Name>-<DD-MM-YYYY>.pdf", dropping the parts a session doesn't have.
+function toPdfFileName(sessionId: string, documentId: string, fallbackName?: string): string {
+  const content = useVoice2RxStore.getState().sessionV2ContentById[sessionId];
+  const templateName =
+    fallbackName || content?.documents.find((doc) => doc.document_id === documentId)?.document_name;
+  const name = [
+    toFileNamePart(content?.session_details?.title as string | undefined),
+    toFileNamePart(templateName),
+    toFileNameDate(content?.created_at || ''),
+  ]
+    .filter(Boolean)
+    .join('-');
+  return `${name || 'document'}.pdf`;
+}
+
 /**
  * Render the current document to a PDF buffer via the printer capability's native HTML→PDF
  * (desktop only). Returns `null` when no native PDF export is available (e.g. web), so callers
  * can surface a friendly error rather than send a broken file.
  */
-function toPdfFileName(fallbackName?: string): string {
-  const safeName = (fallbackName || 'document').replace(/[^\w.-]+/g, '-');
-  return safeName.toLowerCase().endsWith('.pdf') ? safeName : `${safeName}.pdf`;
-}
-
 export const buildDocumentPdfBuffer = async (
-  _sessionId: string,
-  _documentId: string,
+  sessionId: string,
+  documentId: string,
   fallbackName?: string
 ): Promise<{ buffer: ArrayBuffer; fileName: string } | null> => {
   const contentHtml = capturePrintContentHtml();
@@ -1056,7 +1097,10 @@ export const buildDocumentPdfBuffer = async (
   const html = buildDocumentHtml(contentHtml, hf, 'print', getCompactPrintSetting());
 
   const blob = await htmlToPdf(html);
-  return { buffer: await blob.arrayBuffer(), fileName: toPdfFileName(fallbackName) };
+  return {
+    buffer: await blob.arrayBuffer(),
+    fileName: toPdfFileName(sessionId, documentId, fallbackName),
+  };
 };
 
 // Renders the current document to PDF via the native HTML->PDF path and saves it, no print dialog.
