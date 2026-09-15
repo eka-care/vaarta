@@ -75,6 +75,7 @@ data:
   ECHO_DEFAULT_TRANSCRIBER_PROVIDER: "openai_compatible"
   ECHO_TRANSCRIBER_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
   ECHO_DEFAULT_TRANSCRIBER_MODEL: "/model/parrotlet-a"
+  # ECHO_TRANSCRIBER_PATH: "/audio/transcriptions"   # override if the server mounts the endpoint elsewhere
 
   # --- Models: LLM — self-hosted structuring model -------------------------
   ECHO_DEFAULT_LLM_PROVIDER: "openai_compatible"

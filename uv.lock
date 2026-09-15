@@ -575,7 +575,7 @@ wheels = [
 [[package]]
 name = "echo"
 version = "0.4.0"
-source = { git = "https://github.com/eka-care/echo-sdk.git?rev=5cf18d151d6f81a4eb1e1469d7526d8ade1cf112#5cf18d151d6f81a4eb1e1469d7526d8ade1cf112" }
+source = { git = "https://github.com/eka-care/echo-sdk.git?rev=f88aafec3d8b9b4c80e2f54b427656790611a80f#f88aafec3d8b9b4c80e2f54b427656790611a80f" }
 dependencies = [
     { name = "orjson" },
     { name = "pydantic" },
