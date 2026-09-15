@@ -11,7 +11,7 @@ members = ["apps/api", "apps/worker", "packages/core"]
 [tool.uv.sources]
 scribe-core = { workspace = true }
 scribe-api = { workspace = true }
-echo = { git = "https://github.com/eka-care/echo-sdk.git", rev = "f88aafec3d8b9b4c80e2f54b427656790611a80f" }  # sarvam-support, PR #38 review fixes
+echo = { git = "https://github.com/eka-care/echo-sdk.git", rev = "32feaf021776799f585bb6a556468fcc33732323" }  # sarvam-support, PR #38 review fixes
 
 [dependency-groups]
 dev = [

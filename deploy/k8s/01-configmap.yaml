@@ -76,6 +76,8 @@ data:
   ECHO_TRANSCRIBER_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
   ECHO_DEFAULT_TRANSCRIBER_MODEL: "/model/parrotlet-a"
   # ECHO_TRANSCRIBER_PATH: "/audio/transcriptions"   # override if the server mounts the endpoint elsewhere
+  # ECHO_TRANSCRIBER_CA_BUNDLE: "/certs/<file>.pem"  # https endpoint behind a private CA (falls back to ECHO_LLM_CA_BUNDLE)
+  # ECHO_TRANSCRIBER_VERIFY_SSL: "false"            # dev/testing only (falls back to ECHO_LLM_VERIFY_SSL)
 
   # --- Models: LLM — self-hosted structuring model -------------------------
   ECHO_DEFAULT_LLM_PROVIDER: "openai_compatible"
