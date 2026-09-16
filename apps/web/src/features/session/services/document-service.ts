@@ -751,7 +751,9 @@ function buildDocumentHtml(
     }
     .print-body {
       max-width: 21cm;
-      overflow: hidden;
+      /* clip, not hidden: hidden also clips vertically and truncates the last line */
+      overflow-x: clip;
+      overflow-y: visible;
     }
     button, [data-no-print], .wysiwyg-wrapper > div:first-child:has(button) {
       display: none !important;
