@@ -2,9 +2,9 @@
 Generic emit tools — one BaseTool per SectionKind.
 
 Each tool binds a `KIND` + `PAYLOAD_MODEL`; the base class derives the
-input schema from the payload model and handles state mutation. Adding
-a new kind is: enum value (payloads.py) + payload model + KIND_TO_PAYLOAD
-entry + a tool subclass here. The system prompt does not change.
+input schema from the payload model and handles state mutation. Domain
+modes (scribe/modes/<mode>/) subclass _GenericEmitTool for their own
+kinds and register them in their ModeProfile; the engine does not change.
 """
 
 from typing import Any, ClassVar, Dict, Optional, Type
@@ -164,10 +164,11 @@ ALL_GENERIC_TOOLS: Dict[SectionKind, Type[_GenericEmitTool]] = {
     SectionKind.NARRATIVE: NarrativeTool,
 }
 
-# switch for turning off tools (empty by default; names from NAME_TO_TOOL)
+# switch for turning off tools in every mode (empty by default; tool names)
 DISABLED_TOOLS: frozenset = frozenset()
 
-# name-keyed tool registry.
+# name-keyed registry of the GENERIC tools only. The active mode's full
+# registry (generic + domain tools) is scribe.structuring.tools.catalog.name_to_tool().
 NAME_TO_TOOL: Dict[str, Type[_GenericEmitTool]] = {
     cls.name: cls
     for cls in (

@@ -4,10 +4,11 @@ import { ArrowLeft } from 'lucide-react';
 import { VaartaLogoLottie } from '@/shared-components/vaarta-logo-lottie';
 import { TUTORIAL_VIDEO_SRC } from '@/constants/tutorial';
 import { WebOnly } from '@/platform';
+import AppName from '@/shared-components/app-name';
 
 export const metadata: Metadata = {
-  title: 'Vaarta tutorial — a short tour',
-  description: 'A short tour of Vaarta, the ambient AI scribe for note taking.',
+  title: 'Tutorial — a short tour',
+  description: 'A short tour of the ambient AI scribe for note taking.',
 };
 
 const TutorialPage = () => {
@@ -27,7 +28,7 @@ const TutorialPage = () => {
           </div>
         </WebOnly>
         <h1 className="shrink-0 text-2xl font-semibold leading-8 text-[#1A1A1A]">
-          New to Vaarta? Watch a short tour.
+          New to <AppName />? Watch a short tour.
         </h1>
         {/* min-h-0 is load-bearing: flex min-height:auto would otherwise floor this at the video's intrinsic height */}
         <div className="min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-border bg-black">

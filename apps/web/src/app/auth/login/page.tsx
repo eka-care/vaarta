@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@ui/src';
 import { Eye, EyeOff } from 'lucide-react';
 import { VaartaLogoLottie } from '@/shared-components/vaarta-logo-lottie';
+import { setAppBranding } from '@/config/app-branding';
 
 type Mode = 'login' | 'signup';
 
@@ -33,6 +34,8 @@ type AuthModeInfo = {
   oidc_display_name?: string;
   // one button per configured provider (AUTH_PROVIDERS)
   providers?: SsoProvider[];
+  app_name?: string;
+  app_mode?: 'general' | 'medical';
 };
 
 const FIELD_CLS =
@@ -53,6 +56,7 @@ export default function LoginPage() {
     fetch('/connect-auth/v1/auth-mode')
       .then((r) => r.json())
       .then((info: AuthModeInfo) => {
+        setAppBranding(info);
         try {
           // the logout flow reads this to finish sign-out at the IdP
           sessionStorage.setItem('scribe-auth-mode', JSON.stringify(info));

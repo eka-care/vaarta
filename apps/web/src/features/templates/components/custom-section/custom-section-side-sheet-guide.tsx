@@ -1,4 +1,7 @@
+'use client';
+
 import { Card, CardContent } from '@ui/src';
+import { useAppName } from '@/config/app-branding';
 
 const templateCreationTips = [
   'Start with a brief session overview.',
@@ -8,6 +11,7 @@ const templateCreationTips = [
 ];
 
 const CustomSectionSideSheetGuide = () => {
+  const appName = useAppName();
   return (
     <Card className="border-0 rounded-none h-full">
       <CardContent className="space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
@@ -22,7 +26,7 @@ const CustomSectionSideSheetGuide = () => {
         <div className="space-y-1.5">
           <p className="text-sm font-semibold">How Templates Work</p>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Vaarta will use these instructions as a guide whenever you record a session with this
+            {appName} will use these instructions as a guide whenever you record a session with this
             template. Describe what you want to see in the final note, rather than filling fixed
             fields.
           </p>

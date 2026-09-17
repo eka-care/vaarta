@@ -15,13 +15,16 @@ import Script from 'next/script';
 import OfflineIndicator from '@/shared-components/offline-indicator';
 import { PlatformProvider } from '@/platform';
 import DesktopAuthBootstrap from '@/provider/desktop-auth-bootstrap';
+import AppBrandingLoader from '@/shared-components/app-branding-loader';
 
 const geistSans = { variable: GeistSans.variable };
 const geistMono = { variable: GeistMono.variable };
 
+// Build-time default; AppBrandingLoader replaces the title at runtime with
+// the deployment's APP_NAME.
 export const metadata: Metadata = {
-  title: 'vaarta',
-  description: 'Vaarta - AI-powered voice transcription and note taking',
+  title: 'Vaarta',
+  description: 'AI-powered voice transcription and note taking',
   other: {
     'apple-itunes-app': 'app-id=6756741683',
   },
@@ -79,6 +82,7 @@ export default function RootLayout({
                       </ScreenContainer>
                     </Suspense>
                   </DesktopAuthBootstrap>
+                  <AppBrandingLoader />
                   <ToastWrapper />
                   <OfflineIndicator />
                 </PlatformProvider>

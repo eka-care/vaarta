@@ -7,13 +7,11 @@ section, whatever the domain (meetings, interviews, clinical, finance).
 The LLM picks the kind that best fits the template heading and fills the
 payload with markdown content.
 
-Extending this module with a new kind requires three local edits:
-    1. Add the SectionKind enum value.
-    2. Add the corresponding payload model (subclass of StrictModel).
-    3. Add the (kind, model) entry to KIND_TO_PAYLOAD.
-
-`tools/generic_tools/generic.py` then adds the matching tool class; the system prompt
-does not change.
+Domain kinds (the clinical ones below) are table-shaped variants with
+canonical columns; their payload models and emit tools live with the mode
+that uses them (scribe/modes/medical/tools/) and register into
+KIND_TO_PAYLOAD when that mode is loaded. The enum lists every kind the
+frontend may receive so a persisted state from either mode always parses.
 """
 
 from enum import Enum
@@ -24,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "ColumnType",
     "KIND_TO_PAYLOAD",
+    "require_columns",
     "KeyValueItem",
     "KeyValuePayload",
     "ListPayload",
@@ -45,11 +44,6 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-# "pills" is server-populated only (medication suggestions column); the
-# llm never emits it.
-ColumnType = Literal["text", "markdown", "number", "date", "pills"]
-
-
 ColumnType = Literal["text", "markdown", "number", "date"]
 
 
@@ -67,36 +61,21 @@ class TableColumn(StrictModel):
     type: ColumnType = "markdown"
 
 
-# drug_name carries the COMPLETE dictated product name including strength
-# ("Dolo 650mg") — the catalog stores names the same way, so the whole
-# string is the search query and the whole string gets replaced. dosage is
-# the amount per intake ("1 tablet").
-MEDICATION_REQUIRED_COLUMNS = [
-    "drug_name",
-    "dosage",
-    "frequency",
-    "duration",
-    "notes",
-]
-
-
-def _require_medication_columns(headers: List[TableColumn], model_name: str) -> None:
-    present = {h.key for h in headers}
-    missing = [k for k in MEDICATION_REQUIRED_COLUMNS if k not in present]
-    if missing:
-        raise ValueError(
-            f"{model_name}.headers is missing required medication "
-            f"column key(s): {missing}. Required keys (in this order): "
-            f"{MEDICATION_REQUIRED_COLUMNS}. Extra columns are "
-            "allowed when the transcript supplies that data."
-        )
-
-
 class SectionKind(str, Enum):
+    # generic (every mode)
     LIST = "LIST"
     TABLE = "TABLE"
     KEY_VALUE = "KEY_VALUE"
     NARRATIVE = "NARRATIVE"
+    # clinical (medical mode) — all table-shaped with canonical columns
+    MEDICATION_TABLE = "MEDICATION_TABLE"
+    PROCEDURES = "PROCEDURES"
+    LAB_RESULTS = "LAB_RESULTS"
+    LAB_INVESTIGATIONS = "LAB_INVESTIGATIONS"
+    VITAL_TABLE = "VITAL_TABLE"
+    PATIENT_MEDICAL_HISTORY = "PATIENT_MEDICAL_HISTORY"
+    DIAGNOSIS = "DIAGNOSIS"
+    EXAMINATION_FINDINGS = "EXAMINATION_FINDINGS"
 
 
 class ListPayload(StrictModel):
@@ -111,6 +90,18 @@ class TablePayload(StrictModel):
 
     headers: List[TableColumn] = []
     rows: List[Dict[str, str]] = []
+
+
+def require_columns(headers: List[TableColumn], required: List[str], model_name: str) -> None:
+    """Shared validator for table kinds with canonical columns."""
+    present = {h.key for h in headers}
+    missing = [k for k in required if k not in present]
+    if missing:
+        raise ValueError(
+            f"{model_name}.headers is missing required column key(s): {missing}. "
+            f"Required keys (in this order): {required}. Extra columns are "
+            "allowed when the transcript supplies that data."
+        )
 
 
 class KeyValueItem(StrictModel):
@@ -156,6 +147,8 @@ class Section(BaseModel):
     edited_by_user: bool = False
 
 
+# Generic kinds here; a mode adds its own entries when its profile loads
+# (see scribe/modes/medical/tools/payloads.py).
 KIND_TO_PAYLOAD: Dict[SectionKind, type[BaseModel]] = {
     SectionKind.LIST: ListPayload,
     SectionKind.TABLE: TablePayload,

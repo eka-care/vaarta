@@ -1,0 +1,419 @@
+# Prompt content for the AG-UI emit tools, rendered into the system prompt's
+# {{tools_available}} block by ToolCatalog.render_tools_available (catalog.py).
+#
+# Per-tool entries:
+#   summary            one-line statement of what the tool emits
+#   when_to_use        content shapes this tool is the right choice for
+#   rules              hard constraints (canonical columns, streaming order)
+#   mandatory_content  content types that MUST use this tool when it is enabled;
+#                      rendered into the "Mandatory tool selection" section
+#   routes_away        cross-references to sibling tools; each line is rendered
+#                      ONLY when the target tool is also enabled for the run
+#
+# Keys under `tools:` must exactly match the medical ModeProfile's tool
+# registry (scribe/modes/medical/profile.py) — enforced at startup and by
+# tests/unit/structuring/tools/test_catalog.py.
+
+version: 1
+
+preamble: |
+  Each template section with supporting data is exactly ONE tool call. Emit the
+  call's arguments in this exact order so the UI can render the heading before
+  its content:
+    1. key           Slug of display_name (^[a-z][a-z0-9_]*$); stable across
+                     runs of the same template.
+    2. display_name  Heading verbatim from the doctor's template (translated
+                     to English).
+    3. order         0-indexed; preserve the doctor's template order.
+    4. payload       Kind-specific content.
+  Re-emitting with the same `key` REPLACES the section in place — use only to
+  revise, never to append. For tabular tools, emit `headers` (the full column
+  list) BEFORE `rows`; rows are dicts keyed by header.key; leave a cell blank
+  ('') when the transcript does not specify that field. For list/key-value
+  tools, emit items top-to-bottom in natural reading order. If one heading
+  mixes shapes (e.g. a medications table plus advice prose), split it into
+  adjacent sections with consecutive `order` values.
+
+fallback_rule: |
+  Use ONLY the tools listed below — never reference or attempt any other tool.
+  If a content type's dedicated tool is not listed, emit that content with the
+  closest listed structural tool; when no structured tool fits, use
+  add_narrative as prose. Never drop content because its dedicated tool is
+  unavailable.
+
+tools:
+  add_list:
+    summary: "Emit a bulleted-list section."
+    when_to_use: |
+      Flat enumerations where order matters but per-item column structure does
+      not — chief complaint, allergies, diagnoses, advice items, follow-ups,
+      referrals, ROS bullets, past medical history. Each item is one
+      self-contained markdown string; inline richer per-item detail (severity,
+      status, laterality) in the string itself.
+    routes_away:
+      - content: "repeated records sharing the same columns"
+        tool: add_table
+      - content: "labelled single fields"
+        tool: add_key_value
+      - content: "paragraph-shaped content"
+        tool: add_narrative
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "procedures or surgeries"
+        tool: add_procedures
+
+  add_table:
+    summary: "Emit a generic tabular section (rows x named columns)."
+    when_to_use: |
+      Records sharing the same named columns, when no dedicated table tool
+      exists for the content — imaging/radiology studies, immunizations,
+      referrals with structured fields.
+    rules: |
+      Define `headers` once — each with key, label, and editor type
+      (text | markdown | number | date) — then `rows` as dicts keyed by
+      header.key. STREAM headers BEFORE rows so the UI can build the table
+      skeleton before cells arrive. If a section has only one row and no
+      natural repetition, prefer a key-value shape.
+    routes_away:
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "procedures or surgeries"
+        tool: add_procedures
+      - content: "one-off labelled fields"
+        tool: add_key_value
+      - content: "a flat list of strings"
+        tool: add_list
+      - content: "prose"
+        tool: add_narrative
+
+  add_key_value:
+    summary: "Emit a key-value (definition-list) section of labelled scalar fields."
+    when_to_use: |
+      Content that reads as labelled scalar fields top-to-bottom — patient
+      demographics, visit metadata, lifestyle/social habits, family-history
+      one-liners, follow-up details. Each item is a {key, value} pair where
+      value is markdown; each label should appear at most once.
+    routes_away:
+      - content: "the same set of fields repeating for multiple records"
+        tool: add_table
+      - content: "an ordered enumeration without labels"
+        tool: add_list
+      - content: "prose"
+        tool: add_narrative
+
+  add_narrative:
+    summary: "Emit a free-form markdown prose section."
+    when_to_use: |
+      Content that is naturally prose — HPI, Subjective, Objective, Physical
+      Examination, Assessment reasoning, Plan summary, Notes, Synopsis,
+      narrative Review of Systems.
+    rules: |
+      One coherent markdown block; use inline bullets only when the prose
+      genuinely calls for them. Do NOT repeat the section heading inside the
+      markdown — `display_name` is rendered as the title.
+    routes_away:
+      - content: "flat enumerations"
+        tool: add_list
+      - content: "records sharing columns"
+        tool: add_table
+      - content: "labelled scalar fields"
+        tool: add_key_value
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "procedures or surgeries"
+        tool: add_procedures
+
+  add_medication_table:
+    summary: "Emit a MEDICATIONS-ONLY tabular section."
+    when_to_use: |
+      Prescribed or advised medications — and nothing else.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these five canonical columns in this exact order:
+        1. drug_name   (text)
+        2. dosage      (text)
+        3. frequency   (text)
+        4. duration    (text)
+        5. notes       (markdown)
+      `drug_name` is the COMPLETE medication name as dictated, INCLUDING the
+      strength/volume when the doctor says it (e.g. 'Dolo 650mg', 'Augmentin
+      625 Duo', 'Crocin DS 60ml') — never split the strength into another
+      column and never put it in `dosage`. `dosage` is the amount per intake
+      (e.g. '1 tablet', '10 ml'). If the doctor says 'Dolo 650 twice daily',
+      drug_name is 'Dolo 650' and dosage stays blank.
+      Write `drug_name` EXACTLY as dictated in the transcript — never expand,
+      correct, translate, or substitute brand/generic names.
+      If the transcript carries additional per-drug data (e.g. route, brand,
+      timing, indication, form, refills), ADD those as extra columns
+      AFTER the canonical five — do not collapse that data into `notes`.
+      Omitting any of the five required column keys will fail validation.
+      STREAM headers BEFORE rows; leave a cell blank ('') when unspecified.
+    mandatory_content:
+      - "prescribed or advised medications"
+    routes_away:
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "procedures or surgeries"
+        tool: add_procedures
+      - content: "allergies or symptoms"
+        tool: add_list
+      - content: "prose"
+        tool: add_narrative
+
+  add_procedures:
+    summary: "Emit a PROCEDURES-ONLY tabular section."
+    when_to_use: |
+      Procedures or surgeries — whether advised or already performed — and
+      nothing else. Emit a row ONLY for procedures actually mentioned in the
+      transcript.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these three canonical columns in this exact order:
+        1. procedure_name  (text)
+        2. timing          (text)
+        3. note            (markdown)
+      `timing` is when the procedure is advised (e.g. "After 3 Days",
+      "Immediately", "Before next visit"). If the transcript carries additional
+      per-procedure data, ADD those as extra columns AFTER the canonical three —
+      do not collapse that data into `note`. Omitting any of the three required
+      column keys will fail validation. STREAM headers BEFORE rows; leave a
+      cell blank ('') when unspecified.
+    mandatory_content:
+      - "procedures or surgeries — whether advised or already performed"
+    routes_away:
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "prose"
+        tool: add_narrative
+
+  add_lab_results:
+    summary: "Emit a LAB-RESULTS-ONLY tabular section (results WITH values)."
+    when_to_use: |
+      Laboratory / investigation / diagnostic results that carry a value — and
+      nothing else. Emit a row ONLY for lab tests actually mentioned in the
+      transcript. For tests being ORDERED/advised with no result yet, use
+      add_lab_investigations instead.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these five canonical columns in this exact order:
+        1. test_name        (text)
+        2. value            (text)
+        3. unit             (text)
+        4. reference_range  (text)
+        5. out_of_range     (text)
+      `out_of_range` flags an abnormal result (e.g. "high", "low", or "" when
+      normal/unspecified). If the transcript carries additional per-test data,
+      ADD those as extra columns AFTER the canonical five — do not collapse
+      that data into another cell. Omitting any of the five required column
+      keys will fail validation. STREAM headers BEFORE rows; leave a cell
+      blank ('') when unspecified.
+    mandatory_content:
+      - "laboratory / investigation / diagnostic results WITH values"
+    routes_away:
+      - content: "lab tests ORDERED/advised with no result yet"
+        tool: add_lab_investigations
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "procedures or surgeries"
+        tool: add_procedures
+      - content: "prose"
+        tool: add_narrative
+
+  add_vital_table:
+    summary: "Emit a VITALS-ONLY tabular section."
+    when_to_use: |
+      Vital signs (BP, HR, SpO2, temperature, RR, weight, height, BMI, etc.) —
+      and nothing else.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these five canonical columns in this exact order:
+        1. vital_name    (text)
+        2. value         (text)
+        3. unit          (text)
+        4. normal_range  (text)
+        5. notes         (markdown)
+      If the transcript carries additional per-vital data (e.g.
+      time_of_recording, method, laterality), ADD those as extra columns AFTER
+      the canonical five — do not collapse that data into `notes`. Omitting any
+      of the five required column keys will fail validation. STREAM headers
+      BEFORE rows; leave a cell blank ('') when unspecified.
+    mandatory_content:
+      - "vital signs (BP, HR, SpO2, temperature, RR, weight, height, BMI, etc.)"
+    routes_away:
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "lab/investigation results"
+        tool: add_lab_results
+      - content: "procedures or surgeries"
+        tool: add_procedures
+      - content: "prose"
+        tool: add_narrative
+
+  add_patient_medical_history:
+    summary: "Emit a PATIENT-MEDICAL-HISTORY-ONLY tabular section."
+    when_to_use: |
+      The patient's ongoing / past medical history — chronic conditions,
+      allergies, and lifestyle habits (alcohol/tobacco/smoking) the patient does
+      or does not have — and nothing else. Emit a row ONLY for conditions,
+      allergies, or habits actually mentioned, including explicitly denied ones
+      ("no history of diabetes").
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these five canonical columns in this exact order:
+        1. condition  (text)
+        2. category   (text)
+        3. status     (text)
+        4. since      (text)
+        5. note       (markdown)
+      `category` is one of `condition`, `drug_allergy`, `other_allergy`,
+      `lifestyle_habit` (blank when unclear). `status` is `yes` when the patient
+      has/confirms it, `no` for an explicit denial, or "" when unstated. `since`
+      is onset/duration as stated (e.g. "5 years", "since 2019"). `note` carries
+      extra detail (reaction for allergies, quantity/frequency for habits,
+      current control). If the transcript carries additional per-item data, ADD
+      those as extra columns AFTER the canonical five. Omitting any of the five
+      required column keys will fail validation. STREAM headers BEFORE rows;
+      leave a cell blank ('') when unspecified.
+    mandatory_content:
+      - "the patient's pre-existing conditions, allergies, or lifestyle habits (past/ongoing history)"
+    routes_away:
+      - content: "diagnoses or clinical impressions made at this visit"
+        tool: add_diagnosis
+      - content: "laboratory / investigation / diagnostic results"
+        tool: add_lab_results
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "prose"
+        tool: add_narrative
+
+  add_diagnosis:
+    summary: "Emit a DIAGNOSIS-ONLY tabular section."
+    when_to_use: |
+      Diagnoses, clinical impressions, or assessments made at THIS visit — and
+      nothing else. Emit a row ONLY for diagnoses actually stated or clearly
+      implied.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these four canonical columns in this exact order:
+        1. diagnosis  (text)
+        2. since      (text)
+        3. status     (text)
+        4. note       (markdown)
+      `since` is onset/duration as stated (e.g. "2 weeks", "since childhood").
+      `status` is the clinical status — 'active', 'provisional', 'resolved',
+      'ruled_out', 'chronic', or "" when unstated. `note` carries clinical
+      reasoning, differential, or extra detail. Do NOT invent ICD-10 or any
+      other codes. If the transcript
+      carries additional per-diagnosis data, ADD those as extra columns AFTER the
+      canonical four. Omitting any of the four required column keys will fail
+      validation. STREAM headers BEFORE rows; leave a cell blank ('') when
+      unspecified.
+    mandatory_content:
+      - "current diagnoses / clinical impressions made at this visit"
+    routes_away:
+      - content: "the patient's pre-existing background conditions, allergies, or habits"
+        tool: add_patient_medical_history
+      - content: "laboratory / investigation / diagnostic results"
+        tool: add_lab_results
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "free-text assessment reasoning"
+        tool: add_narrative
+
+  add_examination_findings:
+    summary: "Emit an EXAMINATION-FINDINGS-ONLY tabular section (on-examination / O/E findings)."
+    when_to_use: |
+      Clinical examination findings the doctor states on examination
+      (inspection / palpation / percussion / auscultation) — and nothing else.
+      Emit a row ONLY for findings actually stated, including pertinent negatives
+      ("no organomegaly").
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these three canonical columns in this exact order:
+        1. finding  (text)
+        2. status   (text)
+        3. detail   (markdown)
+      `status` is 'present', 'absent' (a pertinent negative, e.g. "no murmur"),
+      'normal', 'abnormal', or "" when unstated. `detail` carries the finding's
+      qualifiers as stated — site, character/type, radiation, severity,
+      associated features — as text in `detail`. If the transcript carries
+      additional per-finding data, ADD those as extra columns AFTER the canonical
+      three. Omitting any of the three required column keys will fail validation.
+      STREAM headers BEFORE rows; leave a cell blank ('') when unspecified.
+    mandatory_content:
+      - "clinical examination findings (inspection / palpation / percussion / auscultation)"
+    routes_away:
+      - content: "vital signs"
+        tool: add_vital_table
+      - content: "patient-reported symptoms / review-of-systems"
+        tool: add_list
+      - content: "diagnoses or clinical impressions"
+        tool: add_diagnosis
+      - content: "prose"
+        tool: add_narrative
+
+  add_lab_investigations:
+    summary: "Emit a LAB-INVESTIGATIONS-ONLY tabular section — tests ORDERED/ADVISED (no result yet)."
+    when_to_use: |
+      Lab tests or radiology investigations ORDERED / advised at this visit with
+      no result yet — and nothing else. This is DISTINCT from add_lab_results,
+      which carries test RESULTS with values. Emit a row ONLY for investigations
+      actually ordered/advised.
+    rules: |
+      Same shape as a generic table (headers + rows), but `headers` MUST always
+      include these four canonical columns in this exact order:
+        1. investigation  (text)
+        2. test_on        (text)
+        3. repeat_on      (text)
+        4. remarks        (markdown)
+      `test_on` is when to do the test (e.g. "Today", "After 3 Days").
+      `repeat_on` is when to repeat it, if stated. `remarks` carries
+      instructions (e.g. "fasting", "with contrast").
+      Write `investigation` EXACTLY as dictated in the transcript — never
+      expand, correct, or substitute test names or abbreviations ('CBC'
+      stays 'CBC').
+      If the transcript carries additional per-investigation data, ADD those
+      as extra columns AFTER the canonical four. Omitting any of the four
+      required column keys will fail validation. STREAM headers BEFORE rows;
+      leave a cell blank ('') when unspecified.
+    mandatory_content:
+      - "lab tests or radiology being ORDERED / advised (no results yet)"
+    routes_away:
+      - content: "laboratory / investigation results WITH values"
+        tool: add_lab_results
+      - content: "prescribed or advised medications"
+        tool: add_medication_table
+      - content: "procedures or surgeries"
+        tool: add_procedures
+      - content: "prose"
+        tool: add_narrative
+
+mandatory_selection_header: |
+  Mandatory tool selection (absolute — apply before everything else): decide
+  these by CONTENT, not by section shape, heading wording, or how the doctor's
+  template formats or describes them. A section whose content matches one of
+  these types MUST use its mapped tool — even if the template names or formats
+  it as a list/table, even if its description says to list or tabulate it, and
+  even if it contains only a single item:

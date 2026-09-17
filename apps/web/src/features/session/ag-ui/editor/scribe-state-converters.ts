@@ -25,6 +25,7 @@ import type {
   TableColumn,
   TablePayload,
 } from '../types';
+import { isTableKind } from '../types';
 const showdownConverter = new Showdown.Converter({ tables: true });
 
 const EMPTY_DOC: JSONContent = {
@@ -62,9 +63,6 @@ function sectionToBlock(
     case 'LIST':
       body = [listPayloadToBody(section.payload as Partial<ListPayload>, extensions)];
       break;
-    case 'TABLE':
-      body = [tablePayloadToBody(section.payload as Partial<TablePayload>, extensions)];
-      break;
     case 'KEY_VALUE':
       body = [kvPayloadToBody(section.payload as Partial<KeyValuePayload>, extensions)];
       break;
@@ -72,7 +70,11 @@ function sectionToBlock(
       body = narrativePayloadToBody(section.payload as Partial<NarrativePayload>, extensions);
       break;
     default:
-      body = [emptyParagraph()];
+      // TABLE and every clinical kind (medication, vitals, labs, ...) share
+      // the {headers, rows} payload shape.
+      body = isTableKind(section.kind)
+        ? [tablePayloadToBody(section.payload as Partial<TablePayload>, extensions)]
+        : [emptyParagraph()];
   }
 
   return {
@@ -304,7 +306,8 @@ export function scribeStateToMarkdown(state: ScribeState): string {
           parts.push(items.map((item) => `**${item.key}**: ${item.value}`).join('\n'));
         break;
       }
-      case 'TABLE': {
+      default: {
+        if (!isTableKind(section.kind)) break;
         const payload = section.payload as Partial<TablePayload>;
         const headers = Array.isArray(payload.headers) ? payload.headers : [];
         const rows = Array.isArray(payload.rows) ? payload.rows : [];

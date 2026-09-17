@@ -51,7 +51,6 @@ RUN uv sync --all-packages --frozen --no-dev
 # belt-and-suspenders: keep the src dirs on sys.path at interpreter startup
 RUN printf '/app/apps/api/src\n' > /app/.venv/lib/python3.11/site-packages/scribe_src.pth
 
-COPY templates ./templates
 COPY scripts ./scripts
 COPY .env.example ./
 COPY --from=web-build /repo/apps/web/out /app/web-static

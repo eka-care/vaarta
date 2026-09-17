@@ -20,5 +20,5 @@ Today's date: {{date}}
 
 <expected_output_json>
 Return ONLY a JSON object with exactly these fields and no extra text:
-{"title": "<short template name>", "desc": "<the full template: structuring instructions + markdown section layout>"}
+{"title": "<short template name>", "desc": "<one-line description of when to use this template>", "template_instructions": "<the full template: structuring instructions + markdown section layout, as a single string>"}
 </expected_output_json>

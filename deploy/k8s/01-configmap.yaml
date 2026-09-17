@@ -66,6 +66,9 @@ data:
 
   # --- Auth -----------------------------------------------------------------
   WORKSPACE_ID: "bharatai-workspace"   # all users share this workspace (data partition)
+  # --- Product mode & branding ------------------------------------------
+  APP_MODE: "general"                 # general | medical (tools, prompts, seeded templates)
+  APP_NAME: "Vaarta"                  # display name in the UI + discovery service_name
   AUTH_ISSUER: "vaarta.bharatai"
   # OIDC_ISSUER / OIDC_AUTHORIZE_URL / OIDC_TOKEN_URL also fall back to
   # SELF_URL (discovery.py).

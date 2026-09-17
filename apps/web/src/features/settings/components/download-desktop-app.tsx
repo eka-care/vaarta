@@ -3,6 +3,7 @@
 import { Button } from '@ui/src';
 import { ShieldCheck } from 'lucide-react';
 import { MAC_UNIVERSAL_APP_DOWNLOAD_URL, WINDOWS_APP_DOWNLOAD_URL } from '@/constants/constant';
+import { useAppName } from '@/config/app-branding';
 
 function AppleIcon() {
   return (
@@ -23,6 +24,7 @@ function WindowsIcon() {
 const isMac = typeof window !== 'undefined' && /Macintosh/.test(window.navigator.userAgent);
 
 const DownloadDesktopApp = () => {
+  const appName = useAppName();
   const platformLabel = isMac ? 'macOS' : 'Windows';
   const note = isMac ? 'Optimized for macOS 12 and above' : 'Optimized for Windows 10 and above';
 
@@ -34,7 +36,7 @@ const DownloadDesktopApp = () => {
         </div>
 
         <div className="flex flex-col gap-1">
-          <p className="font-semibold text-base leading-6">Download Vaarta for Desktop</p>
+          <p className="font-semibold text-base leading-6">Download {appName} for Desktop</p>
           <p className="text-sm text-muted-foreground leading-5">
             Runs natively on desktop, requires no browser, and syncs instantly across devices.
           </p>

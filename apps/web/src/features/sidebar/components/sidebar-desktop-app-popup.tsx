@@ -3,6 +3,7 @@
 import { forwardRef, memo } from 'react';
 import { Monitor, Video, ShieldCheck, X, ExternalLink } from 'lucide-react';
 import { Button } from '@ui/src';
+import { useAppName } from '@/config/app-branding';
 
 type SidebarDesktopAppPopupProps = {
   onDownloadClick: () => void;
@@ -14,11 +15,12 @@ const SidebarDesktopAppPopup = memo(
     { onDownloadClick, onClose },
     ref
   ) {
+    const appName = useAppName();
     return (
       <div
         ref={ref}
         role="dialog"
-        aria-label="Get the Vaarta desktop app"
+        aria-label={`Get the ${appName} desktop app`}
         className="absolute left-40 bottom-12 w-[320px] z-50 flex flex-col gap-3 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-border p-3"
       >
         {/* Icon + close button */}
@@ -37,7 +39,7 @@ const SidebarDesktopAppPopup = memo(
         </div>
 
         <p className="text-[15px] font-semibold leading-snug text-[#1A1A1A]">
-          Get the Vaarta desktop app
+          Get the {appName} desktop app
         </p>
 
         <ul className="flex flex-col gap-2">

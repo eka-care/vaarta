@@ -1,6 +1,10 @@
+'use client';
+
 import { PlatformDownloadCta } from './platform-download-cta';
+import { useAppName } from '@/config/app-branding';
 
 export function DownloadHero() {
+  const appName = useAppName();
   return (
     <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center justify-center gap-12 px-4 pb-16 pt-12 md:px-8 md:pb-22 md:pt-22 xl:px-16">
       <div className="flex flex-col items-center justify-center gap-4">
@@ -17,7 +21,7 @@ export function DownloadHero() {
         </h1>
 
         <p className="max-w-[525px] text-center text-lg leading-7 text-card-foreground">
-          Vaarta listens to any conversation — meetings, interviews, calls — and turns it into
+          {appName} listens to any conversation — meetings, interviews, calls — and turns it into
           clear, structured notes.
         </p>
       </div>

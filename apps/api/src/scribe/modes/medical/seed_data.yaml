@@ -1,0 +1,100 @@
+# Seed data loaded by scripts/setup.py when APP_MODE=medical — clinical
+# template directory (wid=DEFAULT).
+# Each `desc` is the per-run USER prompt: section skeleton + template-specific
+# guidance only. Shared guardrails (no fabrication, omit empty sections, English
+# output, third person, pertinent negatives, no repetition, tool-selection
+# rules) live in the SYSTEM prompt and tool_prompts.yaml — do not duplicate
+# them here beyond what the template genuinely needs.
+# Section notation: Name — kind — guidance. Kinds: list | table | key_value |
+# narrative | medication_table | vital_table | lab_results | lab_investigations |
+# procedures | diagnosis | examination_findings | patient_medical_history.
+# `section_ids` stays empty (markdown/desc-based templates).
+#
+# seed_mode: append (upsert only) | replace (also archive DEFAULT rows absent
+# from this file — never hard-deletes; old sessions keep resolving them).
+seed_mode: replace
+
+sections: []
+templates:
+
+- id: 3b6f6d9e-0d7a-4a3c-9c6f-4a1e2f7c8d01
+  title: Clinical Notes
+  type: default
+  desc: |-
+    Convert the doctor–patient consultation into a structured clinical note. Include only sections that have data.
+    SECTIONS — in order:
+    Patient Demographics — list — Name, DOB, gender, contact information
+    Visit Information — list — Date/time of encounter, visit type (first visit / follow-up)
+    Chief Complaint — list — primary reason for visit and duration of symptoms
+    History of Present Illness — list — chronological: onset, location, duration, characterization, aggravating/alleviating factors, associated symptoms, prior treatments attempted
+    Review of Systems — list — by body system, with positives and pertinent negatives
+    Past Medical History — list — chronic conditions, previous surgeries/procedures, major hospitalizations, significant past illnesses
+    Current Medications / Treatment — medication_table — current medications/treatments, OTC medications, supplements/herbal remedies as stated; do not infer generics or indications
+    Allergies — list — medication, food and environmental allergies with the nature of the reaction
+    Social History — list — occupation / work environment, living situation, tobacco / alcohol / substance use, diet / exercise patterns, relevant social determinants of health
+    Family History — list — hereditary conditions and health status of immediate family members, with relationship
+    Lifestyle Habits / History — list — smoking history (current / ex-smoker, pack-years), alcohol and substance use, dietary habits, physical activity, childhood history, occupational exposures, other long-term lifestyle factors
+    Vital Signs — vital_table — temperature, pulse, respiratory rate, blood pressure, pain score, height, weight, BMI, oxygen saturation
+    Physical Examination — examination_findings — general appearance and findings by body system, with pertinent positives and negatives
+    Laboratory / Diagnostic Results — lab_results — test results, imaging findings, and previous significant results for comparison (with dates where stated)
+    Assessment — diagnosis — diagnoses, clinical reasoning, differential diagnoses
+    Treatment Plan — list — treatment plan for the diagnosis, medications prescribed, ordered tests / procedures
+    Procedures Performed — procedures — description of procedures, findings / outcomes, complications (if any)
+    Advices — list — home care instructions, warning signs to watch for, return precautions
+    Follow-up Instructions — list — date / time / duration and instructions for the follow-up appointment
+    Referrals — list — referral to another doctor / speciality / ward, with reason
+    RULES
+    Never write "not mentioned", "not specified" or placeholders — omit the section instead. Do not predict drug generics, indications or interpretations. If there is no medically relevant content whatsoever, emit nothing.
+  section_ids: []
+
+- id: 7c2e1a54-9b3d-4e8f-a1c2-5d6e7f8a9b02
+  title: SOAP Notes
+  type: default
+  desc: |-
+    Convert the doctor–patient consultation into a structured SOAP note. Always emit all four sections in this order, each as descriptive prose; if a section has no data, its narrative is exactly: None
+    SECTIONS — in order:
+    Subjective — narrative — information reported by the patient: chief complaint and duration; history of present illness (onset, location, duration, character, radiation, aggravating/relieving factors, associated symptoms, progression, prior treatment and response); relevant review of systems with positives and pertinent negatives; pertinent past medical, surgical, medication, allergy, family and social/lifestyle history as volunteered. Capture the patient's own description of symptoms and concerns.
+    Objective — narrative — measurable, observable data from the encounter: vital signs (temperature, pulse, respiratory rate, blood pressure, SpO2, height, weight, BMI, pain score); general appearance and physical examination findings by system, with pertinent positives and negatives; results of laboratory tests, imaging and other investigations reviewed at this visit (with values and dates as stated); in-clinic procedures performed and their findings.
+    Assessment — narrative — the clinician's interpretation of the subjective and objective data: primary / working diagnosis; differential diagnoses; severity or stage; relevant risk factors; any clinical reasoning, prognosis or risk stratification explicitly discussed.
+    Plan — narrative — the management roadmap: medications prescribed or modified (name, dose, route, frequency, duration as stated); non-pharmacological measures; investigations or tests ordered; procedures planned; patient education and counselling; warning signs / return precautions; referrals (specialty, reason); follow-up timing and instructions.
+    RULES
+    Do not predict drug generics, indications, diagnoses or interpretations. Do not repeat the same information across the four sections. If there is no medically relevant content whatsoever, emit all four sections with the narrative: None
+  section_ids: []
+
+- id: e58a4c19-2f7b-4d61-8e3a-9b0c1d2e3f03
+  title: Prescription Print
+  type: default
+  desc: |-
+    Convert the consultation into a structured prescription. Include only sections that have data.
+    SECTIONS — in order:
+    Patient Demographics — list — Name, DOB, Age, Gender, Contact
+    Visit Information — list — date/time, visit type (first visit / follow-up)
+    Chief Complaint — list — primary reason + duration
+    History of Present Illness — list — onset, location, duration, character, aggravating/relieving factors, associated symptoms, prior treatment
+    Review of Systems — list — positives + pertinent negatives (e.g. "No chest pain")
+    Past Medical History — patient_medical_history — chronic conditions, surgeries, hospitalizations (+ year if stated)
+    Medication History — medication_table — ongoing medications only, with reason in notes
+    Allergies — table — columns: Type, Allergen, Reaction
+    Social History — list — occupation, living situation, tobacco, alcohol, substance use, diet, exercise
+    Family History — table — columns: Relation, Condition
+    Travel History — list
+    Vaccination History — list
+    Vital Signs — vital_table — temperature, pulse, RR, BP, SpO2, height, weight, BMI, pain score
+    Physical Examination — examination_findings — each finding by system/area, including pertinent negatives
+    Laboratory/Diagnostic Results — lab_results — results with values, units and reference ranges as stated
+    Past Investigations — table — columns: Test, Date, Result
+    Assessment — diagnosis — diagnoses, differentials, clinical reasoning
+    Prescribed Medications — medication_table — one row per drug (see below)
+    Prescribed Investigations — lab_investigations — ordered tests (+ urgency if stated)
+    Prescribed Procedures — procedures — procedure + schedule/details
+    Prescribed Vaccinations — list — vaccine + schedule
+    Procedures Performed — procedures — procedure, findings/outcome, complications
+    Advice — list — home care, warning signs, return precautions
+    Follow-up — list — timeline + purpose
+    Referral — list — Doctor, Speciality, Reason
+    Notes — narrative — medically relevant info not fitting above (always last)
+    PRESCRIBED MEDICATIONS — one row per drug:
+    drug_name includes the form prefix when spoken (e.g. "Tab. Paracetamol", "Syp. Ambroxol", "Cap. Amoxicillin", "Inj. Diclofenac") and the strength when spoken. Fill only the columns explicitly spoken; leave a cell empty if that detail was not stated. Never guess. Add route, quantity and instructions as extra columns only when stated. Expand frequency abbreviations: OD → once daily, BD → twice daily, TDS → three times daily, QID → four times daily, SOS → as needed, stat → immediately.
+    RULES
+    Section titles must appear as plain names without numbering. Never emit an empty section, a placeholder, or markers like [?], [unknown], [not specified]. Do not predict drug generics, indications or reference ranges. If there is no medically relevant content whatsoever, emit nothing.
+  section_ids: []

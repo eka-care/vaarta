@@ -9,7 +9,8 @@ Steps (each skippable):
   3. Storage read/write/delete probe
   4. Migrations: app schema + procrastinate queue schema
   5. Queue enqueue round-trip probe
-  6. Seeds: 3 starter templates for the directory (templates/seed_data.yaml)
+  6. Seeds: the default template directory of the active APP_MODE
+     (apps/api/src/scribe/modes/<mode>/seed_data.yaml)
      + workspace config bound to the dev identity            [--no-seed]
   7. Model checks: prompts resolve, LLM ping, STT ping       [--skip-model-check]
   8. Serve-and-verify: boot API, hit /voice/ping + discovery [--no-serve-check]
@@ -173,8 +174,13 @@ def step_seed() -> bool:
         from scribe_core.settings import get_settings
         from scribe.repositories.doc_store import DocStore
 
+        from scribe.modes import get_mode_profile
+
         s = get_settings()
-        data = yaml.safe_load((ROOT / "templates" / "seed_data.yaml").read_text())
+        profile = get_mode_profile()
+        seed_path = profile.seed_path
+        print(f"   seeding {profile.name} mode templates from {seed_path.relative_to(ROOT)}")
+        data = yaml.safe_load(seed_path.read_text())
 
         # seed_mode: append  -> upsert what's in the file, leave everything else alone
         # seed_mode: replace -> additionally archive (soft-delete) any wid=DEFAULT

@@ -74,7 +74,7 @@ async def get_discovery_document():
             supported_versions=["0.1"],
             
             service=ServiceInfo(
-                name=os.getenv("SERVICE_NAME", "Scribe Service"),
+                name=os.getenv("SERVICE_NAME", s.app_name),
                 documentation_url=f"{base_url}/docs",
                 support_email=os.getenv("SUPPORT_EMAIL", s.discovery_support_email),
             ),
