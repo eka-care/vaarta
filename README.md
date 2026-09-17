@@ -46,6 +46,15 @@ APP_MODE=medical   # + 8 clinical section tools (medications, vitals, labs, diag
 APP_NAME=Vaarta    # display name (title, login page, sidebar, print header) — no rebuild needed
 ```
 
+```bash
+make start MODE=medical         # local: pins APP_MODE in .env, builds, seeds medical templates, starts
+make start-prod MODE=medical    # prod VM, same
+make reseed MODE=general        # switch an existing DB: wipe the template directory, seed the mode's
+                                # templates, restart api (users/sessions/custom templates untouched)
+make reset-db MODE=medical      # DESTRUCTIVE: drop postgres + storage volumes and start fresh
+```
+(`reseed-prod` / `reset-db-prod` for the prod compose file.)
+
 Everything mode-specific lives under `apps/api/src/scribe/modes/<mode>/`
 (profile, prompts, `tool_prompts.yaml`, `seed_data.yaml`); the structuring
 engine in `scribe/structuring/` is shared. `scripts/setup.py` seeds the

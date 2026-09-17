@@ -165,7 +165,33 @@ def step_queue() -> bool:
         return False
 
 
-def step_seed() -> bool:
+def _reset_default_templates() -> None:
+    """Hard-delete every directory (wid=DEFAULT) template/section — both
+    modes' seeds — and drop template selections from every config row, so
+    the seed that follows starts from a clean directory. Users' own
+    templates (wid=<workspace>) and all sessions/documents are untouched."""
+    from scribe.repositories.doc_store import DocStore
+
+    for table in ("ekascribe_template", "ekascribe_template_section"):
+        db = DocStore(table)
+        rows = db.scan_by_filter({"wid": "DEFAULT"})
+        for row in rows:
+            db.delete_item(key_dict={"id": row["id"]})
+        print(f"   reset: removed {len(rows)} rows from {table} (wid=DEFAULT)")
+    config_db = DocStore("ekascribe_config")
+    cleared = 0
+    for row in config_db.scan_table():
+        stale = [f for f in ("my_templates", "output_format_template") if f in row]
+        if stale:
+            config_db.remove_fields(
+                key_dict={"b_id": row["b_id"], "user_uuid": row["user_uuid"]},
+                fields=stale,
+            )
+            cleared += 1
+    print(f"   reset: cleared template selections on {cleared} config row(s)")
+
+
+def step_seed(reset: bool = False) -> bool:
     try:
         from datetime import datetime, timezone
 
@@ -178,6 +204,8 @@ def step_seed() -> bool:
 
         s = get_settings()
         profile = get_mode_profile()
+        if reset:
+            _reset_default_templates()
         seed_path = profile.seed_path
         print(f"   seeding {profile.name} mode templates from {seed_path.relative_to(ROOT)}")
         data = yaml.safe_load(seed_path.read_text())
@@ -441,6 +469,12 @@ def main() -> int:
     parser.add_argument("--non-interactive", action="store_true")
     parser.add_argument("--no-env", action="store_true")
     parser.add_argument("--no-seed", action="store_true")
+    parser.add_argument(
+        "--reset-templates",
+        action="store_true",
+        help="before seeding, delete every wid=DEFAULT template/section and clear "
+        "users' template selections (switching APP_MODE, or a clean re-seed)",
+    )
     parser.add_argument("--skip-model-check", action="store_true")
     parser.add_argument("--no-serve-check", action="store_true")
     parser.add_argument("--smoke", action="store_true")
@@ -495,7 +529,7 @@ def main() -> int:
     if wanted("queue"):
         results.append(("queue", step_queue()))
     if wanted("seed") and not args.no_seed:
-        results.append(("seed", step_seed()))
+        results.append(("seed", step_seed(reset=args.reset_templates)))
     if wanted("models") and not args.skip_model_check:
         results.append(("models", step_models()))
     if wanted("serve") and not args.no_serve_check:
