@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "postgresql": { "type": "object", "properties": { "deploy": { "type": "boolean" } } },
+    "minio": { "type": "object", "properties": { "deploy": { "type": "boolean" } } },
+    "database": { "type": "object", "properties": { "host": { "type": "string" }, "port": { "type": "integer" }, "sslmode": { "enum": ["", "disable", "allow", "prefer", "require", "verify-ca", "verify-full"] } } },
+    "secrets": { "type": "object", "properties": { "create": { "type": "boolean" }, "existingSecret": { "type": "string" } } },
+    "ingress": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "host": { "type": "string" } } },
+    "storage": { "type": "object", "properties": { "backend": { "enum": ["s3", "local"] } } },
+    "asr": { "type": "object", "properties": { "provider": { "enum": ["model_api", "openai_compatible", "sarvam", "gemini", "ekacare"] } } },
+    "llm": { "type": "object", "properties": { "provider": { "enum": ["anthropic", "openai_compatible", "openwebui"] } } }
+  },
+  "allOf": [
+    { "if": { "properties": { "postgresql": { "properties": { "deploy": { "const": false } } } } },
+      "then": { "properties": { "database": { "required": ["host"], "properties": { "host": { "minLength": 1 } } } } } }
+  ]
+}

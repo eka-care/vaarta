@@ -1,0 +1,74 @@
+# parrotlet-a, speech recognition. Container settings are BharatAI's production deployment
+# (bharatai-deployment repo, parrotlet-asr/deployment.yaml); only the cluster-specific parts differ:
+# no hostname pin, a ClusterIP service, resources sized for a g6.2xlarge, rollouts in place.
+# Install into vaarta's namespace under the name vaarta expects:
+#   helm upgrade --install eka-asr helm/parrotlet-model -n eka-care -f helm/parrotlet-model/values-parrotlet-a.yaml
+# vaarta reaches it at http://eka-asr.<namespace>.svc:8000/v1.
+#
+# Requests need the audio marker <|audio_bos|><audio><|audio_eos|> in the text prompt next to the
+# input_audio part; vaarta's built-in transcription prompt has it.
+model:
+  name: /model/parrotlet-a
+  image: ekacare/parrotlet_a:v2.5b   # private on Docker Hub, amd64, ~24 GB; weights and the parrotlet vLLM plugin are inside
+  # The image's own launcher, spelled out so vLLM flags are controlled here (as in BharatAI).
+  command: ["python3", "/usr/local/bin/vllm", "serve"]
+  args:
+    - --model=/model/parrotlet-a
+    - --max-model-len=8192
+    - --dtype=bfloat16
+    - --trust-remote-code
+    - --port=8000
+    - --max-logprobs=20
+    # One shared audio cache instead of mirrored copies in the API server and the engine. With the default,
+    # the mirrors drift, the engine's request thread dies ("Expected a cached item for mm_hash"), and every
+    # later request hangs. Do not use --mm-processor-cache-gb=0 instead: the engine will not start.
+    - --mm-processor-cache-type=shm
+  env:
+    HF_HOME: /cache
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+imagePullSecrets:
+  - name: dockerhub                  # kubectl create secret docker-registry dockerhub --docker-username=ekacare --docker-password=<token>
+automountServiceAccountToken: false
+securityContext:
+  privileged: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+gpu:
+  count: 1
+  shm: 16Gi                          # BharatAI: the 64 MB container default breaks PyTorch/CUDA
+  nodeSelector:
+    eka.care/gpu: "true"             # the label OpenTofu puts on the GPU node group
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+# BharatAI runs 32 CPU / 128 GiB on an H100 node. A g6.2xlarge has 8 vCPU / 32 GiB, so this is the most
+# that fits after the node's own reservations. requests == limits keeps the pod in Guaranteed QoS.
+resources:
+  cpu: "6"
+  memory: 24Gi
+cache:
+  size: 20Gi
+  tmp: 10Gi
+
+rollout:
+  maxSurge: 0                        # in place: one GPU per model, so the old pod stops before the new one starts
+  maxUnavailable: 1
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 15
+
+tests:
+  audio: true                        # `helm test eka-asr` also sends a generated tone through the audio path,
+                                     # which wedges on its own while text prompts still answer
+
+probes:
+  startupSeconds: 900                # 15 minutes of model load (the image pull happens before the clock starts)
+  timeoutSeconds: 5
+  readinessPeriodSeconds: 15
+  livenessPeriodSeconds: 60
+  deepLiveness: true                 # generates a token: catches a dead engine that /health would not
+  livenessPrompt: ping               # parrotlet-a answers a text-only prompt in ~2 s (verified 15 Sep)

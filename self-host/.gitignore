@@ -1,0 +1,15 @@
+# Anything a client fills in or OpenTofu writes locally. State holds the database password.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Values files a client edits from the template, and the .env from its example
+values-aws.yaml
+!helm/vaarta/values-aws.yaml
+.env
+
+# Packaged charts
+*.tgz
+!helm/*/charts/*.tgz

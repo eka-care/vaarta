@@ -1,0 +1,83 @@
+{{- if include "vm.testOn" (list . "generation") }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vm.fullname" . }}-test-generation
+  labels:
+    {{- include "vm.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: generation
+      image: {{ (.Values.tests).image | default "python:3.12-slim" }}
+      command: ["python", "-u", "-c"]
+      args:
+        - |
+          import json, sys, urllib.request as u
+
+          BASE = "http://{{ include "vm.fullname" . }}:{{ .Values.service.port }}/v1"
+          MODEL = {{ .Values.model.name | quote }}
+          TIMEOUT = {{ (.Values.tests).timeoutSeconds | default 180 }}
+          {{- /* opt-in, unlike the other toggles: a missing tests: block must not send audio to a text-only model */}}
+          AUDIO = {{ if and (include "vm.testOn" (list . "generation")) ((.Values.tests).audio) }}True{{ else }}False{{ end }}
+          # parrotlet-a rejects an audio request whose text part does not carry this marker.
+          MARKER = "<|audio_bos|><audio><|audio_eos|>"
+
+          fails = []
+
+          # 1 · the model is served under the name the apps ask for
+          try:
+              ids = [m["id"] for m in json.load(u.urlopen(BASE + "/models", timeout=60))["data"]]
+              if MODEL in ids:
+                  print("PASS models: " + MODEL + " is served")
+              else:
+                  fails.append("models: expected " + MODEL + ", got " + repr(ids))
+          except Exception as ex:
+              fails.append("models: " + str(ex)[:300])
+
+          # 2 · the engine actually generates. A ready pod is not a working engine: vLLM can serve
+          #     /health long after its request thread has died.
+          def chat(content, label):
+              message = dict(role="user", content=content)
+              body = dict(model=MODEL, messages=[message], max_tokens=16, temperature=0)
+              request = u.Request(BASE + "/chat/completions", data=json.dumps(body).encode(),
+                                  headers={"Content-Type": "application/json"})
+              try:
+                  answer = json.load(u.urlopen(request, timeout=TIMEOUT))
+                  text = answer["choices"][0]["message"]["content"] or ""
+                  print("PASS " + label + ": model answered " + repr(text[:80]))
+              except Exception as ex:
+                  detail = ex.read().decode()[:300] if hasattr(ex, "read") else str(ex)[:300]
+                  fails.append(label + ": " + detail)
+
+          chat("ping", "generation")
+
+          # 3 · audio models only: one second of generated tone through the multimodal path, which fails
+          #     independently of text (a wedged mm cache answers text prompts and hangs on audio).
+          if AUDIO:
+              import base64, io, math, struct, wave
+              buffer = io.BytesIO()
+              writer = wave.open(buffer, "wb")
+              writer.setnchannels(1)
+              writer.setsampwidth(2)
+              writer.setframerate(16000)
+              writer.writeframes(b"".join(
+                  struct.pack("<h", int(6000 * math.sin(i * 2 * math.pi * 440 / 16000))) for i in range(16000)))
+              writer.close()
+              clip = dict(data=base64.b64encode(buffer.getvalue()).decode(), format="wav")
+              parts = [dict(type="text", text=MARKER + " Transcribe this audio."),
+                       dict(type="input_audio", input_audio=clip)]
+              chat(parts, "audio")
+
+          for f in fails:
+              print("FAIL " + f)
+          if fails:
+              print("")
+              print("The model is reachable but not answering as expected.")
+              print("Logs: kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "vm.fullname" . }}")
+          sys.exit(1 if fails else 0)
+{{- end }}

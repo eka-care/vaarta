@@ -1,0 +1,5 @@
+{ "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "required": ["model", "gpu"],
+  "properties": {
+    "model": { "type": "object", "required": ["name", "image"], "properties": { "name": { "type": "string", "minLength": 1 }, "image": { "type": "string", "minLength": 1 } } },
+    "gpu": { "type": "object", "properties": { "count": { "type": "integer", "minimum": 1 } } },
+    "replicaCount": { "type": "integer", "minimum": 1 } } }

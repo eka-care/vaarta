@@ -1,0 +1,49 @@
+{{- if .Values.migrate.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vaarta.fullname" . }}-migrate
+  labels: {{- include "vaarta.labels" . | nindent 4 }}
+  annotations:
+    # post-install (not pre-install): with bundled Postgres the database only exists once the release is applied.
+    # pre-upgrade on upgrades: the database is already there and the schema must move before the new pods roll.
+    helm.sh/hook: post-install,pre-upgrade
+    # weight 10: runs AFTER the subcharts' own post-install hooks (minio creates its buckets at weight 0)
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrate.backoffLimit }}
+  template:
+    metadata:
+      labels: {{- include "vaarta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      # No serviceAccountName here on purpose: this Job is a Helm hook, and hooks are applied
+      # before the release's own resources, so the ServiceAccount does not exist yet on the
+      # upgrade that first introduces it. The Job only talks to Postgres — cloud credentials
+      # are not needed (on AWS the S3 probe step is dropped from migrate.steps).
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h {{ include "vaarta.dbHost" . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }}; do echo waiting for postgres; sleep 2; done"]
+      containers:
+        - name: migrate
+          image: {{ include "vaarta.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if (.Values.migrate).command }}
+          command: {{ toJson .Values.migrate.command }}
+          {{- else }}
+          command: ["/app/.venv/bin/python", "scripts/setup.py", "--non-interactive", "--no-env", "--skip-model-check", "--no-serve-check", "--only", {{ .Values.migrate.steps | default "storage,migrations,queue,seed" | quote }}]
+          {{- end }}
+          env: {{- include "vaarta.env" . | nindent 12 }}
+          envFrom: {{- include "vaarta.envFrom" . | nindent 12 }}
+          volumeMounts: {{- include "vaarta.volumeMounts" . | nindent 12 }}
+      volumes: {{- include "vaarta.volumes" . | nindent 8 }}
+{{- end }}

@@ -1,0 +1,13 @@
+clusterName: ""      # REQUIRED  also the karpenter.sh/discovery tag value
+nodeRole: ""         # REQUIRED  the node IAM role Karpenter attaches to what it launches
+
+# What Karpenter is allowed to launch. GPU families are deliberately absent: the models need one
+# whole GPU on a node sized for them, so GPU capacity stays the fixed managed node group.
+instanceCategories: ["t", "m", "c", "r"]
+instanceGeneration: "2"      # launch newer than this generation
+architectures: ["amd64"]
+capacityTypes: ["on-demand"] # add "spot" when the workload tolerates interruption
+diskSize: 50Gi
+cpuLimit: "100"              # ceiling for everything Karpenter creates, in vCPU
+consolidateAfter: 1m
+expireAfter: 720h            # recycle nodes every 30 days so they never drift far from the AMI

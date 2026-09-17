@@ -1,0 +1,9 @@
+dependencies:
+- name: postgres
+  repository: https://groundhog2k.github.io/helm-charts/
+  version: 1.6.8
+- name: minio
+  repository: https://charts.min.io/
+  version: 5.4.0
+digest: sha256:ee839efb3775b1e3ce2b70011b51de18af3e4478fec0714fb47540444b4aaba2
+generated: "2026-09-11T15:17:21.300393+05:30"

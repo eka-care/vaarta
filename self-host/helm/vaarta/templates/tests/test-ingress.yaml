@@ -1,0 +1,101 @@
+{{- if and (include "vaarta.testOn" (list . "ingress")) .Values.ingress.enabled }}
+{{- $name := printf "%s-test-ingress" (include "vaarta.fullname" .) }}
+# Read-only access to this release's own namespace, just enough to read the Ingress address.
+# Kept until the next `helm test` (before-hook-creation) — deleting it on success would remove the
+# role before the test pod that needs it starts.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    resourceNames: [{{ include "vaarta.fullname" . | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $name }} }
+subjects:
+  - { kind: ServiceAccount, name: {{ $name }}, namespace: {{ .Release.Namespace }} }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  serviceAccountName: {{ $name }}
+  containers:
+    - name: ingress
+      image: {{ include "vaarta.testImage" (list . "kubectl" "alpine/k8s:1.31.4") }}
+      env:
+        - { name: NS, value: {{ .Release.Namespace | quote }} }
+        - { name: INGRESS, value: {{ include "vaarta.fullname" . | quote }} }
+        - { name: HOST, value: {{ .Values.ingress.host | default "" | quote }} }
+      command: ["sh", "-c"]
+      args:
+        - |
+          addr=""
+          for i in $(seq 1 60); do
+            addr=$(kubectl -n "$NS" get ingress "$INGRESS" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            [ -n "$addr" ] && break
+            echo "attempt $i/60: ingress $INGRESS has no load balancer address yet"
+            sleep 5
+          done
+          if [ -z "$addr" ]; then
+            echo "FAIL ingress: no load balancer address after 5 minutes."
+            echo "     Check the ingress controller is installed and running (on AWS: aws-load-balancer-controller in kube-system),"
+            echo "     then: kubectl -n $NS describe ingress $INGRESS"
+            exit 1
+          fi
+          echo "PASS ingress: load balancer address $addr"
+          for i in $(seq 1 60); do
+            if [ -n "$HOST" ]; then
+              code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 --connect-to "$HOST:80:$addr:80" --connect-to "$HOST:443:$addr:443" "http://$HOST/healthz" || true)
+              target="http://$HOST/healthz via $addr"
+            else
+              code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 "http://$addr/healthz" || true)
+              target="http://$addr/healthz"
+            fi
+            if [ "$code" = "200" ]; then echo "PASS ingress: $target returned 200"; exit 0; fi
+            echo "attempt $i/60: $target returned ${code:-no response} (new load balancers take a few minutes to resolve)"
+            sleep 5
+          done
+          echo "FAIL ingress: $target never returned 200. The address exists, so check listener, target group health and security groups."
+          exit 1
+{{- end }}

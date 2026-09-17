@@ -1,0 +1,31 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      expireAfter: {{ .Values.expireAfter }}
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: {{ toJson .Values.architectures }}
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: {{ toJson .Values.capacityTypes }}
+        # No "g": GPU nodes stay the fixed node group, one whole GPU per model pod.
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: {{ toJson .Values.instanceCategories }}
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: [{{ .Values.instanceGeneration | quote }}]
+  limits:
+    cpu: {{ .Values.cpuLimit | quote }}
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: {{ .Values.consolidateAfter }}

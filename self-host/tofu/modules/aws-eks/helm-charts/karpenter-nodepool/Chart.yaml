@@ -1,0 +1,6 @@
+apiVersion: v2
+name: karpenter-nodepool
+description: "The default NodePool and EC2NodeClass for Karpenter. Shipped as a chart because these are custom resources: OpenTofu cannot plan a kubernetes_manifest against a CRD that does not exist yet, but Helm never reads the schema at plan time."
+type: application
+version: 0.1.0
+appVersion: "1"

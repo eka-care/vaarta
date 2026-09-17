@@ -1,0 +1,8 @@
+{{ .Release.Name }}: {{ .Values.model.name }} on {{ .Values.gpu.count }} GPU(s) × {{ .Values.replicaCount }} replica(s).
+
+URL (cluster-internal only): http://{{ include "vm.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/v1
+Point vaarta at it:  --set asr.url=http://{{ include "vm.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/v1
+              or:    --set llm.provider=openai_compatible --set llm.baseUrl=http://{{ include "vm.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/v1 --set llm.model={{ .Values.model.name }}
+
+Model load takes minutes; the startup probe allows {{ .Values.probes.startupSeconds }}s.
+Watch:  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "vm.fullname" . }}

@@ -1,0 +1,33 @@
+# Path 4 — everything on AWS in one apply. Two values are required.
+name   = "acme-pilot"
+region = "ap-south-1"
+
+# Empty for bring-up: no hosted zone, no certificate, nothing waiting on DNS validation. The app answers on
+# the load balancer's own hostname over HTTP. Set it later and re-apply for a real name and TLS.
+domain = ""
+
+# Speech and notes. 0 keeps them on Eka's model endpoint and costs no GPU at all.
+# 1 runs parrotlet-a (speech) in the cluster. 2 runs parrotlet-t (notes) as well.
+gpu_nodes = 0
+
+namespace = "eka-care"
+
+# The network. Must not overlap anything you peer with or reach over VPN.
+vpc_cidr = "10.60.0.0/16"
+az_count = 2
+
+# Sizes. Defaults shown; uncomment to change.
+# kubernetes_version = "1.36"     # EKS moves one minor version at a time: 1.36 -> 1.37, never skip
+# node_instance_type = "t3.medium"
+# node_count         = 2
+# node_max           = 6
+# gpu_instance_type  = "g6.2xlarge"   # one L4. NVIDIA Ampere or newer; g4dn is rejected at plan time
+# rds_instance_class = "db.t4g.medium"
+# rds_multi_az       = false
+# single_nat         = true       # false = one NAT gateway per AZ, for production
+# waf                = true
+
+# Public API endpoint is how kubectl reaches the cluster from a laptop. Narrow these, then set
+# cluster_public_access = false, once a VPN or an in-VPC runner exists.
+cluster_public_access       = true
+cluster_public_access_cidrs = ["0.0.0.0/0"]

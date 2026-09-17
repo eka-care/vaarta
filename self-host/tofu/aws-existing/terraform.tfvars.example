@@ -1,0 +1,21 @@
+# Path 5 — onto a cluster you already have. Two values are required.
+cluster_name = "my-cluster"
+region       = "ap-south-1"
+
+# Where you will install the chart. The IAM role trusts exactly <namespace>:vaarta, so these must agree.
+namespace = "eka-care"
+
+# Speech. 0 keeps it on Eka's model endpoint and adds no GPU cost.
+# 1 adds one GPU node and runs parrotlet-a in your cluster. 2 runs parrotlet-t (notes) as well.
+gpu_nodes = 0
+
+# Already have a bucket for recordings? Name it and only the IAM role is created, scoped to it.
+# existing_bucket = "my-recordings-bucket"
+
+# Already run NVIDIA's device plugin? Then this module should not install a second one.
+# install_device_plugin = false
+
+# The GPU nodes land in your cluster's private subnets. Name them explicitly if that guess is wrong.
+# subnet_ids = ["subnet-aaa", "subnet-bbb"]
+# gpu_instance_type = "g6.2xlarge"
+# gpu_disk_size     = 200

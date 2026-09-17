@@ -1,0 +1,47 @@
+{{- if include "vaarta.testOn" (list . "database") }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vaarta.fullname" . }}-test-database
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: database
+      image: {{ include "vaarta.testImage" (list . "postgres" "postgres:16-alpine") }}
+      env:
+        # the app's own connection settings and secret — the same values the api pods use
+        - { name: PGHOST, value: {{ include "vaarta.dbHost" . | quote }} }
+        - { name: PGPORT, value: {{ .Values.database.port | quote }} }
+        - { name: PGUSER, value: {{ .Values.database.user | quote }} }
+        - { name: PGDATABASE, value: {{ .Values.database.name | quote }} }
+        - name: PGPASSWORD
+          valueFrom: { secretKeyRef: { name: {{ include "vaarta.dbSecretName" . }}, key: {{ .Values.secrets.keys.dbPassword }} } }
+        - { name: PGCONNECT_TIMEOUT, value: "5" }
+        {{- if (.Values.database).sslmode }}
+        - { name: PGSSLMODE, value: {{ .Values.database.sslmode | quote }} }
+        {{- end }}
+      command: ["sh", "-c"]
+      args:
+        - |
+          for i in $(seq 1 30); do pg_isready -q && break; echo "attempt $i/30: $PGHOST:$PGPORT not accepting connections"; sleep 2; done
+          if ! psql -v ON_ERROR_STOP=1 -tAc 'SELECT 1' >/dev/null; then
+            echo "FAIL database: cannot log in to $PGDATABASE on $PGHOST:$PGPORT as $PGUSER with the app's secret."
+            echo "     Check database.host/name/user and the password in secret {{ include "vaarta.dbSecretName" . }}."
+            exit 1
+          fi
+          echo "PASS database: connected to $PGDATABASE on $PGHOST:$PGPORT as $PGUSER"
+          {{- if (.Values.database).sslmode }}
+          tls=$(psql -tAc "SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+          if [ "$tls" != "t" ]; then
+            echo "FAIL database: the session is not encrypted although database.sslmode={{ .Values.database.sslmode }}."
+            exit 1
+          fi
+          echo "PASS database: session encrypted ($(psql -tAc "SELECT version FROM pg_stat_ssl WHERE pid = pg_backend_pid()"))"
+          {{- end }}
+{{- end }}

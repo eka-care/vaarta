@@ -1,0 +1,51 @@
+{{- if and (include "vaarta.testOn" (list . "storage")) (eq .Values.storage.backend "s3") }}
+{{- $endpoint := include "vaarta.s3Endpoint" . }}
+{{- $secret := include "vaarta.s3SecretName" . }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vaarta.fullname" . }}-test-storage
+  labels:
+    {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  # the app's own ServiceAccount: on AWS this exercises IRSA exactly as the api pods use it
+  serviceAccountName: {{ include "vaarta.serviceAccountName" . }}
+  containers:
+    - name: storage
+      image: {{ include "vaarta.testImage" (list . "awsCli" "public.ecr.aws/aws-cli/aws-cli:2.22.0") }}
+      {{- if $secret }}
+      envFrom:
+        - secretRef: { name: {{ $secret }} }
+      {{- end }}
+      env:
+        - { name: AWS_REGION, value: {{ .Values.storage.s3.region | quote }} }
+        - { name: AWS_REQUEST_CHECKSUM_CALCULATION, value: when_required }
+        - { name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: when_required }
+        - { name: AWS_CONFIG_FILE, value: /tmp/aws-config }
+        - { name: BUCKET, value: {{ .Values.storage.s3.vadedBucket | quote }} }
+        - { name: KEY, value: "_helm-test/{{ .Release.Name }}.txt" }
+        - { name: S3_ENDPOINT, value: {{ $endpoint | quote }} }
+      command: ["sh", "-c"]
+      args:
+        - |
+          EP=""
+          if [ -n "$S3_ENDPOINT" ]; then
+            EP="--endpoint-url $S3_ENDPOINT"
+            # S3-compatible stores (MinIO, Ceph) need path-style addressing
+            printf '[default]\ns3 =\n  addressing_style = path\n' > "$AWS_CONFIG_FILE"
+          fi
+          where="s3://$BUCKET/$KEY${S3_ENDPOINT:+ via $S3_ENDPOINT}"
+          echo "identity: $(aws $EP sts get-caller-identity --query Arn --output text 2>/dev/null || echo 'static keys (no STS on this endpoint)')"
+          echo "helm test $(date -u +%FT%TZ)" > /tmp/probe
+          aws $EP s3 cp /tmp/probe "s3://$BUCKET/$KEY" --only-show-errors || { echo "FAIL storage: cannot write $where. Check the bucket exists and the app's role or keys allow s3:PutObject."; exit 1; }
+          echo "PASS storage: wrote $where"
+          aws $EP s3 cp "s3://$BUCKET/$KEY" /tmp/readback --only-show-errors && cmp -s /tmp/probe /tmp/readback || { echo "FAIL storage: wrote but could not read back $where (s3:GetObject)."; exit 1; }
+          echo "PASS storage: read back the same bytes"
+          aws $EP s3 rm "s3://$BUCKET/$KEY" --only-show-errors || { echo "FAIL storage: could not delete $where (s3:DeleteObject)."; exit 1; }
+          echo "PASS storage: deleted the probe object"
+{{- end }}

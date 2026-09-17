@@ -1,0 +1,13 @@
+# Values for NVIDIA's device plugin chart, which makes nvidia.com/gpu schedulable on the GPU nodes.
+# The EKS NVIDIA node image already has the driver and container toolkit; it does not run this plugin.
+#   helm upgrade --install nvidia-device-plugin nvidia-device-plugin \
+#     --repo https://nvidia.github.io/k8s-device-plugin --version 0.20.0 \
+#     -n kube-system -f helm/parrotlet-model/nvidia-device-plugin-values.yaml
+nodeSelector:
+  eka.care/gpu: "true"
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  - key: CriticalAddonsOnly
+    operator: Exists

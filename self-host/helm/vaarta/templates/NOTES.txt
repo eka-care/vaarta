@@ -1,0 +1,24 @@
+vaarta {{ include "vaarta.tag" . }} installed as release {{ .Release.Name }} in {{ .Release.Namespace }}.
+
+URL:        {{ include "vaarta.selfUrl" . }}
+{{- if and (not .Values.config.selfUrl) (not .Values.ingress.host) }}
+
+WARNING:    No public URL is set, so the app is using its in-cluster address above. Browser recording
+            uploads will fail, because the app builds upload URLs from this value with no fallback.
+            Once the load balancer has an address, set it and upgrade:
+              kubectl -n {{ .Release.Namespace }} get ingress {{ include "vaarta.fullname" . }}
+              helm upgrade {{ .Release.Name }} <chart> --reuse-values --set config.selfUrl=http://<load-balancer-address>
+{{- end }}
+Database:   {{ include "vaarta.dbHost" . }}:{{ .Values.database.port }}/{{ .Values.database.name }}
+Storage:    {{ .Values.storage.backend }}{{ if eq .Values.storage.backend "s3" }} → {{ .Values.storage.s3.vadedBucket }}{{ end }}
+ASR:        {{ .Values.asr.provider }} → {{ include "vaarta.asrUrl" . }}
+LLM:        {{ .Values.llm.provider }} / {{ .Values.llm.model }}
+Worker:     {{ ternary "enabled" "in-process" .Values.worker.enabled }}
+
+Bundled:    postgres={{ .Values.postgresql.deploy }} minio={{ .Values.minio.deploy }}  (deploy=false + a host for managed services)
+Secrets:    {{ include "vaarta.secretName" . }}{{ if and .Values.secrets.create (not .Values.secrets.existingSecret) }} (generated on first install, kept on upgrade){{ end }}
+
+Smoke test: open the URL, record 10 seconds, expect a note.
+Verify:     helm test {{ .Release.Name }} -n {{ .Release.Namespace }} --logs   (http, database, storage, ingress)
+Check:      kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+Migrations ran as a post-install/pre-upgrade Job ({{ include "vaarta.fullname" . }}-migrate).

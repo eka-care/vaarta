@@ -1,0 +1,47 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vaarta.fullname" . }}-worker
+  labels: {{- include "vaarta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels: {{- include "vaarta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels: {{- include "vaarta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/values: {{ toYaml .Values | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: {{ include "vaarta.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 120
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h {{ include "vaarta.dbHost" . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }}; do echo waiting for postgres; sleep 2; done"]
+      containers:
+        - name: worker
+          image: {{ include "vaarta.workerImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: EXECUTION_MODE
+              value: worker
+            {{- include "vaarta.env" . | nindent 12 }}
+            # PATCH callbacks go to the api service, not the worker's own SELF_URL
+            - name: SELF_URL
+              value: "http://{{ include "vaarta.fullname" . }}:{{ .Values.service.port }}"
+          envFrom: {{- include "vaarta.envFrom" . | nindent 12 }}
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts: {{- include "vaarta.volumeMounts" . | nindent 12 }}
+      volumes: {{- include "vaarta.volumes" . | nindent 8 }}
+{{- end }}

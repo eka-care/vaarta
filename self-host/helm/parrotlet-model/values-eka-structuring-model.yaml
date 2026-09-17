@@ -1,0 +1,20 @@
+# helm install eka-structuring-model ./helm/parrotlet-model -f helm/parrotlet-model/values-eka-structuring-model.yaml
+model:
+  name: eka-structuring-model
+  image: ekacare/eka-structuring-model:v0.1.6     # ~74 GB; weights baked; image ships its own launcher
+  env:
+    MODEL_PATH: /models/eka-structuring-model
+    SERVED_NAME: eka-structuring-model
+    TP_SIZE: "2"
+    MAX_MODEL_LEN: "131072"
+    GPU_UTIL: "0.87"
+    MAX_CUDAGRAPH_SIZE: "64"
+    DISABLE_CUSTOM_AR: "1"
+gpu:
+  count: 2                        # TP=2 → two GPUs on one node (g5.12xlarge / g6.12xlarge class, or 2× H100)
+  shm: 16Gi
+resources:
+  cpu: "8"
+  memory: 64Gi
+probes:
+  startupSeconds: 1200

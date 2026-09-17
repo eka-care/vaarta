@@ -1,0 +1,69 @@
+# One vLLM model. Install once per model with a values file (see values-parrotlet-a.yaml, values-eka-structuring-model.yaml).
+# Internal only: ClusterIP, no ingress. Apps reach it at http://<release>.<namespace>.svc:8000/v1.
+
+model:
+  name: ""                        # REQUIRED  served model name, e.g. /model/parrotlet-a
+  image: ""                       # REQUIRED  weights are baked into the image (no egress needed at runtime)
+  pullPolicy: IfNotPresent        # a re-pull of a multi-GB image is an hours-long outage
+  # Either give vLLM's full argument list …
+  args: []                        # e.g. [--model=/model/parrotlet-a, --max-model-len=8192, --dtype=bfloat16, --port=8000]
+  # … or, for images with their own launcher (eka-structuring-model), leave args empty and set env
+  command: []                     # empty = image default
+  env: {}                         # MODEL_PATH, TP_SIZE, MAX_MODEL_LEN, …
+
+gpu:
+  count: 1                        # nvidia.com/gpu per pod; = tensor parallel size
+  shm: 4Gi                        # /dev/shm — 4Gi at TP=1, 16Gi at TP>=2 (NCCL). The 64MB default hangs model load.
+  # NVIDIA Ampere or newer (compute capability >= 8.0): g5 (A10G) · g6 (L4) · g6e (L40S) · p4d · p5. T4 / g4dn fails.
+  nodeSelector: {}                # e.g. node.kubernetes.io/instance-type: g5.xlarge, or a Karpenter pool label
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+replicaCount: 1                   # fixed. No HPA, no scale-to-zero: cold start is minutes, a clinician waits seconds.
+resources:                        # CPU/memory beside the GPU; requests == limits → Guaranteed QoS
+  cpu: "4"
+  memory: 16Gi
+cache:
+  size: 20Gi                      # emptyDir for HF / vLLM caches
+  tmp: 10Gi
+
+imagePullSecrets: []
+automountServiceAccountToken: false   # model pods never call the Kubernetes API
+securityContext:                  # container; the model needs no privileges
+  privileged: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+hostAliases: []
+
+service:
+  port: 8000
+
+probes:
+  startupSeconds: 900             # model load; startup probe allows this long before liveness starts
+  timeoutSeconds: 5               # explicit: the Kubernetes default of 1s fails under CPU contention during a rollout
+  readinessPeriodSeconds: 15
+  livenessPeriodSeconds: 60
+  deepLiveness: true              # liveness actually generates a token (GET /health alone hid a ~10h outage)
+  livenessPrompt: ping            # confirm the model answers a text-only prompt before enabling on an audio model
+
+rollout:
+  maxSurge: 1                     # needs one spare GPU during a rollout; set 0 / maxUnavailable 1 when there is none
+  maxUnavailable: 0
+
+# `helm test <release>` only. Nothing here runs during install or upgrade, so it costs a deploy nothing.
+tests:
+  enabled: true
+  generation: true                # /v1/models lists the model, and one short completion comes back
+  audio: false                    # also send a generated one-second tone as input_audio; audio models only (values-parrotlet-a.yaml turns it on)
+  timeoutSeconds: 180             # a cold engine answers its first request slowly
+  image: python:3.12-slim         # mirror this for an air-gapped cluster
+  terminationGracePeriodSeconds: 120
+  preStopSleepSeconds: 15
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+podAnnotations: {}

@@ -1,0 +1,104 @@
+# vaarta on AWS EKS: RDS for the database, S3 for recordings, the app's IAM role for access, an ALB in front.
+# Every value marked FILL is yours to enter. The rest is the AWS shape and rarely changes.
+#
+#   helm upgrade --install vaarta oci://public.ecr.aws/f7k6d9z3/charts/vaarta --version 0.1.8 \
+#     -n eka-care --create-namespace -f values-aws.yaml --wait --timeout 15m
+#
+# Assumed to exist before you install (docs/aws-existing.md, "AWS EKS" says how to create each):
+#   - a PostgreSQL server, and a Kubernetes Secret `vaarta-db` in the namespace holding its password
+#   - an S3 bucket
+#   - an IAM role the pod can assume (IRSA) that trusts <namespace>:vaarta and can read/write that bucket
+#   - the AWS Load Balancer Controller on the cluster
+# Nothing here is a secret: the password is in the Secret above, AWS access is by role, provider keys go in
+# secrets.providerKeys or a Secret you bring.
+
+image:
+  repository: FILL                  # e.g. 123456789012.dkr.ecr.ap-south-1.amazonaws.com/vaarta (nodes pull from ECR with no pull secret)
+  tag: api-latest
+
+# Pulling straight from Docker Hub instead of ECR: set image.repository to ekacare/ekascribe, create the secret
+# once in the namespace, and uncomment.
+#   kubectl -n eka-care create secret docker-registry dockerhub --docker-username=ekacare --docker-password=<token>
+# imagePullSecrets:
+#   - name: dockerhub
+
+serviceAccount:
+  create: true
+  name: vaarta                      # the IAM role must trust exactly <namespace>:vaarta
+  annotations:
+    eks.amazonaws.com/role-arn: FILL   # arn:aws:iam::123456789012:role/<cluster>-vaarta
+
+# ---- database: RDS, no in-cluster Postgres
+postgresql:
+  deploy: false
+database:
+  host: FILL                        # the RDS endpoint, e.g. mydb.abc123.ap-south-1.rds.amazonaws.com
+  port: 5432
+  name: FILL                        # the database name
+  user: FILL                        # the database user
+  existingSecret: vaarta-db         # Secret with key `password`; create it before installing
+  sslmode: require                  # RDS refuses plain connections when rds.force_ssl=1; harmless otherwise
+
+# ---- recordings: S3 through the IAM role, no MinIO and no access keys
+minio:
+  deploy: false
+storage:
+  backend: s3
+  s3:
+    endpointUrl: ""
+    region: FILL                    # the bucket's region, e.g. ap-south-1
+    vadedBucket: FILL               # the bucket name; both fields take the same bucket, the app separates by key prefix
+    nonVadedBucket: FILL
+    existingSecret: ""
+    blobViaApi: true
+
+# The migration's storage probe writes to a bucket literally named `voice-records`, which exists only in the
+# bundled MinIO, so that step is skipped on S3 (app bug, a known app bug: the probe uses a hardcoded bucket name).
+migrate:
+  enabled: true
+  steps: "migrations,queue,seed"
+
+# ---- edge: an internet-facing ALB made by the AWS Load Balancer Controller
+ingress:
+  enabled: true
+  className: alb
+  host: ""                          # empty = the app answers on the ALB's own hostname over HTTP (bring-up).
+                                    # With a domain: scribe.example.com, and uncomment the certificate lines below
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # With an ACM certificate (TLS ends at the ALB; ingress.tls stays false):
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:123456789012:certificate/...
+    # With a WAF web ACL:
+    # alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:ap-south-1:123456789012:regional/webacl/...
+  tls:
+    enabled: false
+
+config:
+  env: prod
+  # The app builds browser upload URLs from selfUrl and has no request-host fallback. With a domain set it
+  # above: https://scribe.example.com. Without one, the ALB hostname exists only after the first install:
+  #   kubectl -n eka-care get ingress vaarta -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  # then put http://<that hostname> here and helm upgrade.
+  selfUrl: ""
+  auth:
+    cookieSecure: ""                # "" follows selfUrl's scheme: true on https, false on http. Set to force
+
+# ---- models: Eka's endpoint by default; no GPU and nothing to run.
+# Running them in this cluster (docs/helm.md): install the eka-asr release, then uncomment.
+asr:
+  provider: model_api
+  model: /model/parrotlet-a
+  # url: ""                         # "" = the in-cluster eka-asr release in this namespace
+# llm:                              # only with the parrotlet-t release running here too
+#   provider: openai_compatible
+#   model: /parrotlet-t/v1
+#   baseUrl: http://parrotlet-t.eka-care.svc:8000/v1
+#   structuringModels: /parrotlet-t/v1
+
+resources:
+  requests: { cpu: 500m, memory: 1Gi }
+  limits: { cpu: "2", memory: 4Gi }

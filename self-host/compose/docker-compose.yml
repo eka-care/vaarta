@@ -1,0 +1,177 @@
+# vaarta — ONE app (the api container serves the web UI too) on Docker Compose: laptop, demo, single-VM pilot.
+# Lives in the vaarta repo root (replaces deploy/docker-compose-prod.yml).
+#   cp .env.example .env    # fill the FILL lines
+#   docker compose up -d
+#   docker compose run --rm migrate
+# Always on: vaarta, postgres, minio (+ minio-init creates the buckets). Profiles: worker (durable queue + worker containers) · gpu (eka-asr on this machine) · tls (Caddy HTTPS)
+name: vaarta
+
+x-app: &app
+  image: ${VAARTA_IMAGE:-ekacare/ekascribe:api-latest}   # full reference: repo:tag. Override wholesale, e.g. your ECR copy
+  restart: unless-stopped
+  env_file: .env
+  environment: &app-env
+    ENV: ${ENV:-prod}
+    SELF_URL: ${SELF_URL:-http://localhost:8000}
+    DATABASE_URL: postgresql://scribe:${POSTGRES_PASSWORD}@postgres:5432/scribe
+    ECHO_PG_HOST: postgres
+    ECHO_PG_PORT: "5432"
+    ECHO_PG_DATABASE: scribe
+    ECHO_PG_USER: scribe
+    ECHO_PG_PASSWORD: ${POSTGRES_PASSWORD}
+    STORAGE_ROOT: /data/storage
+    LOG_DIR: /data/logs
+    DB_BACKEND: postgres
+    QUEUE_BACKEND: postgres
+    STATE_BACKEND: postgres
+    # Storage: MinIO on this machine, through the S3 API. On AWS the same app uses real S3 (docs/02, docs/03).
+    STORAGE_BACKEND: s3
+    S3_ENDPOINT_URL: http://minio:9000
+    S3_BUCKET: vaarta-voice-records
+    S3_VADED_BUCKET_NAME: vaarta-voice-records
+    S3_NON_VADED_BUCKET_NAME: vaarta-voice-batch
+    BLOB_VIA_API: "true"                 # browser uploads go through the api, so MinIO needs no CORS and no public port
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-vaarta}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    AWS_REGION: ${AWS_REGION:-ap-south-1}
+    AWS_REQUEST_CHECKSUM_CALCULATION: when_required   # MinIO does not accept the newer SDK default checksums
+    AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    # ASR: everything else comes from .env (see the ASR block there); these two only give model_api its defaults
+    ECHO_DEFAULT_TRANSCRIBER_PROVIDER: ${ECHO_DEFAULT_TRANSCRIBER_PROVIDER:-model_api}
+    MODEL_API_BASE_URL: ${ASR_URL:-http://eka-asr:8000/v1}
+    ECHO_DEFAULT_TRANSCRIBER_MODEL: ${ECHO_DEFAULT_TRANSCRIBER_MODEL:-/model/parrotlet-a}
+  volumes:
+    - storage:/data/storage
+    - logs:/data/logs
+  depends_on:
+    postgres: { condition: service_healthy }
+    minio-init: { condition: service_completed_successfully }
+
+services:
+  vaarta:
+    <<: *app
+    build:                     # only when the image is not in a registry
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      <<: *app-env
+      EXECUTION_MODE: ${EXECUTION_MODE:-inprocess}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      WEB_DIST_DIR: /app/web-static
+    ports:
+      - "${VAARTA_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  # one-shot: docker compose run --rm migrate   (schema + queue tables + seed templates; probes storage)
+  migrate:
+    <<: *app
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["/app/.venv/bin/python", "scripts/setup.py", "--non-interactive", "--no-env", "--skip-model-check", "--no-serve-check"]
+
+  vaarta-worker:
+    <<: *app
+    image: ${VAARTA_WORKER_IMAGE:-ekacare/ekascribe:worker-latest}   # its own image: `build:` alone would still run the api image
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.worker
+    environment:
+      <<: *app-env
+      EXECUTION_MODE: worker
+      SELF_URL: http://vaarta:8000     # PATCH callbacks go to the api, not the worker
+    # scale: docker compose --profile worker up -d --scale vaarta-worker=2  (set EXECUTION_MODE=worker in .env too)
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scribe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: scribe
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scribe -d scribe"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    # Recordings. Not published on a host port: the app streams uploads through its own API.
+    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-vaarta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    # One-shot: creates the buckets, then exits. voice-records is the fixed name setup.py's storage check writes to
+    # (docs/a known app bug), so the full migration passes here.
+    image: quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z
+    restart: "no"
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-vaarta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing local/vaarta-voice-records local/vaarta-voice-batch local/voice-records
+
+  eka-asr:
+    # Needs nvidia-container-toolkit and an NVIDIA GPU of the Ampere generation or newer (A10G, L4, A100…). T4 fails.
+    profiles: ["gpu"]
+    image: ${ASR_IMAGE:-ekacare/parrotlet_a:v2.5b}
+    restart: unless-stopped
+    command: ["python3", "/usr/local/bin/vllm", "serve", "--model=${ASR_MODEL_PATH:-/model/parrotlet-a}", "--max-model-len=${ASR_MAX_MODEL_LEN:-8192}", "--dtype=bfloat16", "--trust-remote-code", "--port=8000", "--max-logprobs=20", "--mm-processor-cache-type=shm"]   # shm cache: without it one failed audio request hangs every later one
+    shm_size: "16g"      # as the chart and models/: the 64 MB container default breaks PyTorch/CUDA, and 4g is not enough headroom
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/v1/models || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s          # model load
+
+  caddy:
+    profiles: ["tls"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - vaarta
+
+volumes:
+  pgdata:
+  storage:
+  logs:
+  miniodata:
+  caddy_data:

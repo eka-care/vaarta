@@ -1,0 +1,35 @@
+# Path 3 — vaarta on ECS Fargate, optionally with parrotlet-a on GPU instances. Two values are required.
+name  = "acme-ecs"
+image = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/vaarta:api-latest"
+
+region = "ap-south-1"
+
+# Empty for bring-up: HTTP on the load balancer's own hostname. Browsers allow the microphone only over
+# HTTPS or on localhost, so a recording demo needs a domain here.
+domain = ""
+
+# --- speech
+# false: speech and notes come from Eka's model endpoint. No GPU, nothing else to run or pay for.
+# true:  parrotlet-a runs on EC2 GPU instances in this cluster, and vaarta calls it over private DNS.
+#        Fargate has no GPU, so this adds instances you patch and pay for by the hour.
+gpu_model = false
+# gpu_nodes         = 1
+# gpu_instance_type = "g6.2xlarge"    # one L4. NVIDIA Ampere or newer; g4dn is rejected at plan time
+# gpu_disk_size     = 200             # GiB; the model image is 24 GB and is pulled onto it
+
+# The model image is private on Docker Hub. Put the credentials in Secrets Manager first:
+#   aws secretsmanager create-secret --name acme-ecs/dockerhub \
+#     --secret-string '{"username":"ekacare","password":"<access token>"}'
+# model_image_credentials_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:acme-ecs/dockerhub-AbCdEf"
+
+# --- sizes
+# cpu_architecture = "X86_64"     # must match the image you pushed; ARM64 is ~20% cheaper on Fargate
+# cpu              = 1024
+# memory           = 2048
+# desired_count    = 1            # keep at 1 while the job queue runs in-process
+# rds_instance_class = "db.t4g.medium"
+# single_nat         = true       # false = one NAT gateway per AZ
+
+# --- the network. Must not overlap anything you peer with or reach over VPN.
+vpc_cidr = "10.70.0.0/16"
+az_count = 2

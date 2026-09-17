@@ -1,0 +1,19 @@
+apiVersion: v2
+name: vaarta
+description: vaarta — voice to clinical note. One app; the api container serves the web UI. Postgres (pgvector) and MinIO ship as optional subcharts (deploy=true by default) so a bare `helm install` works; set deploy=false and a host to use managed services.
+type: application
+version: 0.1.8
+appVersion: "latest"
+keywords: [vaarta, ekascribe, healthcare]
+maintainers:
+  - name: Eka Care infra
+dependencies:
+  - name: postgres
+    alias: postgresql
+    version: 1.6.8
+    repository: https://groundhog2k.github.io/helm-charts/
+    condition: postgresql.deploy
+  - name: minio
+    version: 5.4.0
+    repository: https://charts.min.io/
+    condition: minio.deploy

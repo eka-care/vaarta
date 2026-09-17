@@ -1,0 +1,55 @@
+# parrotlet-t, notes (structuring). Settings are production's (parrotlet-deployments repo,
+# parrotlet/models/parrotlet_t/prod-values.yaml), with the Docker Hub image that has the weights built in
+# instead of FSx. Dropped: EKA_KAFKA_BROKERS (Eka-internal brokers the model does not need here).
+#   helm upgrade --install parrotlet-t helm/parrotlet-model -n eka-care -f helm/parrotlet-model/values-parrotlet-t.yaml
+# vaarta reaches it at http://parrotlet-t.<namespace>.svc:8000/v1 with model /parrotlet-t/v1.
+model:
+  name: /parrotlet-t/v1              # the served model id: launch.sh serves the checkpoint path
+  image: ekacare/parrotlet-t:prod-0.0.1a   # private on Docker Hub, amd64, ~35 GB, weights at /parrotlet-t/v1, vLLM 0.21
+  command: ["/usr/bin/tini", "--", "/app/launch.sh"]
+  args: []
+  env:
+    MODEL_T_PATH: /parrotlet-t/v1
+    # Speculative decoding with a small draft model, downloaded from Hugging Face at start (public, no token).
+    SPECULATIVE_CONFIG: '{"model":"google/gemma-4-E4B-it-assistant","num_speculative_tokens":4}'
+    HF_HOME: /cache                  # the draft model lands in the pod's cache volume
+
+imagePullSecrets:
+  - name: dockerhub
+automountServiceAccountToken: false
+securityContext:
+  privileged: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+gpu:
+  count: 1
+  shm: 4Gi
+  nodeSelector:
+    eka.care/gpu: "true"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+# Production: requests 4 CPU / 18 GiB, limits 5 CPU / 25 GiB. The chart sets requests == limits.
+resources:
+  cpu: "5"
+  memory: 25Gi
+cache:
+  size: 30Gi
+  tmp: 10Gi
+
+rollout:
+  maxSurge: 0                        # in place
+  maxUnavailable: 1
+  terminationGracePeriodSeconds: 150 # production values
+  preStopSleepSeconds: 150
+
+probes:
+  startupSeconds: 1800               # production: 120 × 15 s
+  timeoutSeconds: 10
+  readinessPeriodSeconds: 30
+  livenessPeriodSeconds: 60
+  deepLiveness: false                # production uses GET /health

@@ -1,0 +1,214 @@
+# vaarta — one app. Bare install works: `helm install vaarta helm/vaarta --set ingress.host=scribe.example.com`
+# Postgres (pgvector) and MinIO are bundled subcharts by default (Langfuse-style `deploy` flags). For production set
+# postgresql.deploy=false + database.host (RDS …) and minio.deploy=false + storage.s3.* (S3 …).
+
+image:
+  repository: ekacare/ekascribe   # the name deploy/Dockerfile.api builds today
+  tag: api-latest                 # the whole tag, exactly as it appears on the registry
+  workerTag: worker-latest        # the worker image's tag, used only when worker.enabled
+  pullPolicy: IfNotPresent
+imagePullSecrets: []              # private registry: - name: dockerhub  (kubectl create secret docker-registry dockerhub --docker-username=… --docker-password=…)
+
+replicaCount: 1
+resources:
+  requests: { cpu: 500m, memory: 1Gi }
+  limits:   { cpu: "2",  memory: 4Gi }
+uvicornWorkers: 2
+
+# api and web are one container. Set web.enabled=false to run API-only (serve the bundle from a CDN instead).
+web:
+  enabled: true
+  distDir: /app/web-static
+
+# Durable queue + worker pods. Off → the api runs the pipeline in-process.
+worker:
+  enabled: false
+  replicaCount: 1
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits:   { cpu: "2",  memory: 4Gi }
+
+# Migrations: a post-install/pre-upgrade hook Job running the app's setup script.
+migrate:
+  enabled: true
+  backoffLimit: 3
+  # steps: env,db,storage,migrations,queue,seed,models,serve (db always runs as a preflight).
+  # On AWS S3 drop `storage`: setup.py probes a hardcoded bucket named voice-records (app bug, reported),
+  # which only exists because the bundled MinIO creates it.
+  steps: "storage,migrations,queue,seed"
+  command: []                     # full override; empty = the script below with `steps`
+
+# --- Dependencies (pointed at) -------------------------------------------
+# Bundled Postgres 16 + pgvector (groundhog2k/postgres subchart). deploy=false → point database.host at RDS / Cloud SQL / your own.
+postgresql:
+  deploy: true
+  image: { registry: docker.io, repository: pgvector/pgvector, tag: pg16 }
+  settings:
+    existingSecret: vaarta-secrets   # the Secret this chart generates (secrets.name); keys POSTGRES_USER / POSTGRES_PASSWORD
+    superuser: { secretKey: POSTGRES_USER }
+    superuserPassword: { secretKey: POSTGRES_PASSWORD }
+  userDatabase:
+    existingSecret: vaarta-secrets   # same Secret; keys POSTGRES_DB / USERDB_USER / USERDB_PASSWORD
+    name: { secretKey: POSTGRES_DB }
+    user: { secretKey: USERDB_USER }
+    password: { secretKey: USERDB_PASSWORD }
+  customScripts:
+    10-pgvector.sh: |
+      #!/bin/sh
+      psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'CREATE EXTENSION IF NOT EXISTS vector;'   # runs as the superuser on the app database
+  storage: { requestedSize: 20Gi, className: "" }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+database:                         # used as-is when postgresql.deploy=false; host auto-set to the subchart otherwise
+  host: ""                        # e.g. <rds-endpoint>
+  port: 5432
+  name: scribe
+  user: scribe
+  existingSecret: ""              # Secret with key `password`; defaults to secrets.existingSecret / the generated one
+  sslmode: ""                     # libpq PGSSLMODE for the app, migrations and tests; "require" on RDS (it refuses plain connections)
+
+# Bundled MinIO (minio/minio subchart, standalone). deploy=false → storage.s3.* points at S3 / GCS-interop / your own.
+minio:
+  deploy: true
+  mode: standalone
+  replicas: 1
+  existingSecret: vaarta-secrets     # the generated Secret; keys rootUser / rootPassword
+  persistence: { size: 50Gi, storageClass: "" }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+  buckets:
+    - { name: vaarta-voice-records, policy: none, purge: false }
+    - { name: vaarta-voice-batch,   policy: none, purge: false }
+    - { name: voice-records,        policy: none, purge: false }   # scripts/setup.py probes this hardcoded name (app bug, reported); harmless extra bucket
+  consoleService: { type: ClusterIP }
+
+storage:
+  backend: s3                     # s3 (bundled MinIO, AWS S3, any S3-compatible) | local (a PVC; single replica only)
+  s3:
+    endpointUrl: ""               # auto-set to the bundled MinIO when minio.deploy=true; empty for real AWS S3
+    region: ap-south-1
+    vadedBucket: vaarta-voice-records
+    nonVadedBucket: vaarta-voice-batch
+    blobViaApi: true              # browser uploads go through the api — no bucket CORS needed
+    existingSecret: ""            # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY; auto = the vaarta Secret with bundled MinIO; omit with IRSA
+  local:
+    size: 50Gi
+    storageClass: ""
+
+asr:                              # speech recognition — pick one provider; the model name must match what the provider serves
+  provider: model_api             # model_api | openai_compatible | sarvam | gemini | ekacare
+  model: /model/parrotlet-a       # e.g. whisper-1 (openai_compatible), saarika:v2.5 (sarvam), models/gemini-2.5-flash (gemini)
+  url: http://vaarta-model.bharatai.gov.in/v1   # Eka's model endpoint (as in ekascribe); "" = the in-cluster eka-asr release
+  language: ""                    # optional hint, e.g. en-IN
+  prompt: ""                      # model_api: override the transcription prompt
+  maxTokens: ""                   # model_api: MODEL_API_MAX_TOKENS
+  # keys go in the Secret / secrets.providerKeys: MODEL_API_AUTH_TOKEN | ECHO_TRANSCRIBER_API_KEY | SARVAM_API_KEY | GOOGLE_API_KEY
+
+llm:                              # structuring model
+  provider: openai_compatible     # anthropic | openai_compatible | openwebui
+  model: eka-structuring-model
+  baseUrl: http://vaarta-model.bharatai.gov.in/v1   # openai_compatible / openwebui
+  structuringModels: eka-structuring-model           # STRUCTURING_MODELS: comma-separated models offered for structuring
+  temperature: "0"
+
+# --- App configuration ---------------------------------------------------
+config:
+  env: prod
+  selfUrl: ""                     # defaults to https://<ingress.host>; browser upload URLs derive from it
+  workspaceId: pilot-workspace
+  authIssuer: vaarta.bharatai
+  auth:
+    accessTtlSeconds: "3600"      # access token lifetime
+    refreshTtlSeconds: "2592000"  # refresh token and cookie lifetime (30 days)
+    cookieName: scribe_session
+    refreshCookieName: scribe_refresh
+    cookieSecure: ""              # AUTH_COOKIE_SECURE. "" = follow the scheme of the public URL (config.selfUrl, else
+                                  # https://<ingress.host> when ingress.tls.enabled): true behind an ALB or any TLS
+                                  # terminator, false on plain-HTTP bring-up. Set "true"/"false" to override.
+  backgroundJobConcurrency: "4"
+  discoverySupportEmail: admin@example.com
+  promptProvider: file            # file | langfuse
+  logLevel: INFO
+  featureFlags:
+    FEATURE_DRUG_SEARCH: "true"
+    FEATURE_STREAMING: "false"
+    FEATURE_FHIR: "false"
+    FEATURE_PATIENT_DIRECTORY: "false"
+    FEATURE_PAYMENTS: "false"
+    FEATURE_PUBLISH_INTEGRATIONS: "false"
+    FEATURE_RECORDS_VAULT: "false"
+  extraEnv: {}                    # any additional KEY: value
+
+# Secrets. Default: the chart CREATES a Secret with random values on first install and keeps them on upgrade
+# (db password, AUTH_JWT_SECRET, UPLOAD_URL_SIGNING_SECRET, MinIO root creds). Put provider API keys in
+# secrets.providerKeys or bring your own Secret with secrets.existingSecret (then create=false).
+secrets:
+  create: true
+  name: vaarta-secrets            # name of the generated Secret (static so the subcharts can reference it; one vaarta per namespace)
+  existingSecret: ""              # your own Secret with the keys below; overrides the generated one (then also set postgresql.*.existingSecret / minio.existingSecret)
+  providerKeys: {}                # ANTHROPIC_API_KEY: "…"  ECHO_LLM_API_KEY: "…"  SARVAM_API_KEY: "…"  — written into the generated Secret
+  authProviders: ""               # AUTH_PROVIDERS: JSON list of sign-in (OIDC) providers; empty = none
+  openwebuiApiKey: ""             # OPENWEBUI_API_KEY
+  keys:
+    dbPassword: password
+
+# ServiceAccount — set annotations for IRSA (AWS), Workload Identity (GCP) and the pods get cloud
+# credentials with no keys in the Secret. OpenTofu emits the role ARN; values-aws-<app>.yaml fills it in.
+serviceAccount:
+  create: true
+  name: ""                        # defaults to the release name
+  annotations: {}                 # eks.amazonaws.com/role-arn: arn:aws:iam::…:role/…
+
+# --- Exposure --------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: ""                   # alb | nginx | istio … empty = cluster default
+  host: ""                        # REQUIRED  e.g. scribe.example.com
+  annotations: {}                 # ALB: alb.ingress.kubernetes.io/scheme: internet-facing, …
+  tls:
+    enabled: true
+    secretName: ""                # cert-manager / ACM leave empty and annotate instead
+  proxyBodySize: 200m
+
+hostAliases: []                   # - ip: 10.0.0.5  hostnames: [asr.internal]  — when cluster DNS cannot resolve a host
+
+# --- Operations ------------------------------------------------------------
+probes:
+  liveness:  { path: /healthz, initialDelaySeconds: 30, periodSeconds: 20, timeoutSeconds: 5, failureThreshold: 3 }
+  readiness: { path: /healthz, initialDelaySeconds: 10, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3 }
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+podSecurityContext:
+  runAsNonRoot: false             # the image runs as root today; flip when the Dockerfile adds a user
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+
+# --- Verification ---------------------------------------------------------
+# `helm test <release> -n <namespace> --logs` runs these as throwaway pods. They never run on install or
+# upgrade — only when someone invokes `helm test`. They use this chart's own values and secrets, so they
+# check the real install, not a special test configuration.
+tests:
+  enabled: true
+  http: true       # the service answers GET /healthz with 200
+  database: true   # the app's own credentials log in; with database.sslmode set, the session is encrypted
+  storage: true    # write, read back and delete an object in storage.s3.vadedBucket as the app (IRSA or S3 keys); s3 backend only
+  ingress: true    # the Ingress gets a load balancer address and serves /healthz through it; needs ingress.enabled and an ingress controller
+  images:          # mirror these for air-gapped clusters
+    curl: curlimages/curl:8.10.1
+    postgres: postgres:16-alpine
+    awsCli: public.ecr.aws/aws-cli/aws-cli:2.22.0
+    kubectl: alpine/k8s:1.31.4

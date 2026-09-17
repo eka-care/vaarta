@@ -1,0 +1,9 @@
+apiVersion: v2
+name: parrotlet-model
+description: One vLLM model on NVIDIA GPUs, OpenAI-compatible on :8000, internal only. Install once per model — eka-asr, eka-structuring-model — with the matching values file. No subcharts.
+type: application
+version: 0.1.6
+appVersion: "vllm"
+keywords: [vllm, gpu, asr, llm]
+maintainers:
+  - name: Eka Care infra

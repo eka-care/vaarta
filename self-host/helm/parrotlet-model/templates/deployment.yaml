@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vm.fullname" . }}
+  labels: {{- include "vm.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.rollout.maxSurge }}
+      maxUnavailable: {{ .Values.rollout.maxUnavailable }}
+  selector:
+    matchLabels: {{- include "vm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vm.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gpu.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gpu.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.rollout.terminationGracePeriodSeconds }}
+      containers:
+        - name: model
+          image: {{ required "model.image is required" .Values.model.image }}
+          imagePullPolicy: {{ .Values.model.pullPolicy }}
+          {{- with .Values.model.command }}
+          command: {{ toJson . }}
+          {{- end }}
+          {{- with .Values.model.args }}
+          args: {{ toJson . }}
+          {{- end }}
+          {{- with .Values.model.env }}
+          env:
+            {{- range $k, $v := . }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: {{ .Values.resources.cpu | quote }}
+              memory: {{ .Values.resources.memory }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            limits:
+              cpu: {{ .Values.resources.cpu | quote }}
+              memory: {{ .Values.resources.memory }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: {{ div .Values.probes.startupSeconds 10 }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: {{ .Values.probes.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: 3
+          {{- if .Values.probes.deepLiveness }}
+          livenessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - |
+                  import json, sys, urllib.request as u
+                  body = json.dumps({"model": {{ .Values.model.name | quote }}, "messages": [{"role": "user", "content": {{ .Values.probes.livenessPrompt | quote }}}], "max_tokens": 1, "temperature": 0}).encode()
+                  req = u.Request("http://127.0.0.1:8000/v1/chat/completions", data=body, headers={"Content-Type": "application/json"})
+                  r = json.load(u.urlopen(req, timeout=20))
+                  sys.exit(0 if r.get("choices") else 1)
+            periodSeconds: {{ .Values.probes.livenessPeriodSeconds }}
+            timeoutSeconds: 25
+            failureThreshold: 3
+          {{- else }}
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: {{ .Values.probes.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: 3
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep {{ .Values.rollout.preStopSleepSeconds }}"]
+          volumeMounts:
+            - { name: dshm, mountPath: /dev/shm }
+            - { name: cache, mountPath: /cache }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: dshm
+          emptyDir: { medium: Memory, sizeLimit: {{ .Values.gpu.shm }} }
+        - name: cache
+          emptyDir: { sizeLimit: {{ .Values.cache.size }} }
+        - name: tmp
+          emptyDir: { sizeLimit: {{ .Values.cache.tmp }} }

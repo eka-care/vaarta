@@ -1,0 +1,5 @@
+{$DOMAIN} {
+    reverse_proxy vaarta:8000
+    encode gzip
+    request_body { max_size 200MB }
+}
