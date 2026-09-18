@@ -41,7 +41,7 @@ services:
     volumes:
       - storage:/data/storage
       - logs:/data/logs
-      - ./certs:/certs:ro   # drop private CA pem files here (OPENWEBUI_CA_BUNDLE=/certs/<file>.pem)
+      - ./certs:/certs:ro   # drop private CA pem files here (ECHO_LLM_CA_BUNDLE=/certs/<file>.pem)
     ports:
       - "8000:8000"   # fronted by infra SSL on the VM (https://bharat-backend.dev.eka.care)
     depends_on:

@@ -70,10 +70,14 @@ data:
   # OIDC_ISSUER / OIDC_AUTHORIZE_URL / OIDC_TOKEN_URL also fall back to
   # SELF_URL (discovery.py).
 
-  # --- Models: STT — self-hosted transcribe service -----------------------
-  ECHO_DEFAULT_TRANSCRIBER_PROVIDER: "model_api"
-  MODEL_API_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
+  # --- Models: STT — self-hosted parrotlet, OpenAI audio wire --------------
+  # POST {ECHO_TRANSCRIBER_BASE_URL}/audio/transcriptions (multipart file + model)
+  ECHO_DEFAULT_TRANSCRIBER_PROVIDER: "openai_compatible"
+  ECHO_TRANSCRIBER_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
   ECHO_DEFAULT_TRANSCRIBER_MODEL: "/model/parrotlet-a"
+  # ECHO_TRANSCRIBER_PATH: "/audio/transcriptions"   # override if the server mounts the endpoint elsewhere
+  # ECHO_TRANSCRIBER_CA_BUNDLE: "/certs/<file>.pem"  # https endpoint behind a private CA (falls back to ECHO_LLM_CA_BUNDLE)
+  # ECHO_TRANSCRIBER_VERIFY_SSL: "false"            # dev/testing only (falls back to ECHO_LLM_VERIFY_SSL)
 
   # --- Models: LLM — self-hosted structuring model -------------------------
   ECHO_DEFAULT_LLM_PROVIDER: "openai_compatible"
@@ -81,11 +85,8 @@ data:
   ECHO_LLM_BASE_URL: "http://vaarta-model.bharatai.gov.in/v1"
   STRUCTURING_MODELS: "eka-structuring-model"
   ECHO_DEFAULT_LLM_TEMPERATURE: "0"
-  # ECHO_DEFAULT_LLM_PROVIDER: "openwebui"
-  # ECHO_DEFAULT_LLM_MODEL: "qwen3-27b"
-  # OPENWEBUI_BASE_URL: "https://bharatai.gov.in"
-  # OPENWEBUI_ENABLE_THINKING: "false"
-  # OPENWEBUI_VERIFY_SSL: "false"
+  # ECHO_LLM_CA_BUNDLE: "/certs/<file>.pem"   # endpoint behind a private CA
+  # ECHO_LLM_VERIFY_SSL: "false"              # dev/testing only
 
   # --- Prompts ------------------------------------------------------------
   ECHO_PROMPT_PROVIDER: "file"
