@@ -17,12 +17,35 @@ import {
 import { getFlavour } from '@/platform';
 import { SESSION_PHASE, MIXPANEL_EVENT_NAME, MIXPANEL_EVENT_TYPE } from '@/constants/enums';
 import { tracker, setSessionContext } from '@/analytics';
-import { ERROR_CODE } from '@eka-care/ekascribe-ts-sdk';
+import { ERROR_CODE, type PatientDetails } from '@eka-care/ekascribe-ts-sdk';
+import type { PartnerContext } from '@/features/partner-session/types';
 import { getSDK } from '../services/sdk-provider';
 import { discardAndCleanup } from '../utils/discard-session';
 
 function teardownSessionMixing() {
   getPlatform().audioCapture?.teardownSessionMixing?.();
+}
+
+// The STT backend accepts explicit codes only (InputLanguage: en, hi, en-hi, en-IN,
+// gu, kn, ml, ta, te, bn, mr, pa) and does no auto-detection — discovery reports
+// auto_detection: false. 'auto_detect' is a client-side preference id with no API
+// equivalent: sent as-is the server resolves it to None, drops it, and rejects the
+// create with "language_hint is required on session create". Code-mixed en-hi is the
+// closest behaviour the backend offers, so that is what it becomes on the wire.
+// The original ids are kept for the UI — only the API payload is translated.
+const AUTO_DETECT_ID = 'auto_detect';
+const AUTO_DETECT_API_EQUIVALENT = 'en-hi';
+// An empty language_hint is always a 400 ("language_hint is required on session
+// create"). That happens whenever the session is created before the user's
+// preferences have loaded — a partner popup opened from another origin gets a
+// fresh sessionStorage, so the persisted store starts empty. Send a valid floor
+// rather than an empty array; a real preference always overrides it.
+const FALLBACK_API_LANGUAGE = 'en-IN';
+
+function toApiLanguageCodes(ids: string[]): string[] {
+  const mapped = ids.map((id) => (id === AUTO_DETECT_ID ? AUTO_DETECT_API_EQUIVALENT : id));
+  const codes = Array.from(new Set(mapped.filter(Boolean)));
+  return codes.length > 0 ? codes : [FALLBACK_API_LANGUAGE];
 }
 
 // Module-level dedup flags
@@ -45,12 +68,28 @@ export function useSessionLifecycle() {
       encounter_id,
       upload_type = 'chunked',
       force = false,
+      session_id,
+      templates,
+      language_hint,
+      patient_details,
+      title,
+      partner_additional_data,
+      partner_context,
     }: {
       templates?: string[];
       encounter_id?: string;
       upload_type?: 'chunked' | 'single';
       // Bypass the reuse guard to replace a stale pointer with a fresh session.
       force?: boolean;
+      // Partner handoff: pins the session id and overrides defaults for this session only.
+      session_id?: string;
+      language_hint?: string[];
+      patient_details?: PatientDetails;
+      /** Partner-set session title — lands in session_details.title, editable by the doctor. */
+      title?: string;
+      /** Remaining partner additional_data keys (attendees, …), merged into the session's own. */
+      partner_additional_data?: Record<string, unknown>;
+      partner_context?: PartnerContext;
     } = {}): Promise<string | null> => {
       const store = useVoice2RxStore.getState();
       const { sessionV2Ongoing } = store;
@@ -64,16 +103,28 @@ export function useSessionLifecycle() {
       if (activeCreatePromise) return activeCreatePromise;
 
       activeCreatePromise = (async () => {
-        const sessionId = 'sc-' + uuidv4().replace(/-/g, '').slice(0, 28);
+        const sessionId = session_id || 'sc-' + uuidv4().replace(/-/g, '').slice(0, 28);
         const createStartMs = Date.now();
 
         try {
-          const { userLevelPreferences } = useVoice2RxStore.getState();
+          const { userLevelPreferences, appConfig, templateNameById } =
+            useVoice2RxStore.getState();
 
           // Snapshot the user's defaults as this session's own config. New sessions always start from default config.
+          // A partner handoff overrides them; ids resolve to names via the cached lookups.
+          const inputLanguages = language_hint
+            ? language_hint.map((id) => ({
+                id,
+                name: appConfig.supported_languages.find((lang) => lang.id === id)?.name || id,
+              }))
+            : userLevelPreferences.input_languages;
+          const outputFormatTemplates = templates
+            ? templates.map((id) => ({ id, name: templateNameById[id] || '' }))
+            : userLevelPreferences.output_format_template;
+
           const newSessionConfig = {
-            input_languages: userLevelPreferences.input_languages,
-            output_format_template: userLevelPreferences.output_format_template,
+            input_languages: inputLanguages,
+            output_format_template: outputFormatTemplates,
             consultation_mode: 'dictation',
             model_type: 'pro',
           };
@@ -89,8 +140,8 @@ export function useSessionLifecycle() {
           store.setRecordingSessionId(sessionId);
           store.setNewSessionId(sessionId);
 
-          const inputLanguage = userLevelPreferences.input_languages.map((l) => l.id);
-          const outputTemplates = userLevelPreferences.output_format_template.map((t) => t.id);
+          const inputLanguage = toApiLanguageCodes(inputLanguages.map((l) => l.id));
+          const outputTemplates = outputFormatTemplates.map((t) => t.id);
           const systemInfo = await getSystemInfo();
 
           // Also mirrored into the store below: the session PATCH replaces
@@ -99,31 +150,47 @@ export function useSessionLifecycle() {
             model_training_consent: userLevelPreferences.model_training_consent.value,
             system_info: systemInfo,
             ...(encounter_id ? { encounter_id } : {}),
+            ...(partner_additional_data ?? {}),
+            ...(partner_context ? { partner_context } : {}),
             _flavour: getFlavour(),
-            input_languages: userLevelPreferences.input_languages,
-            output_format_template: userLevelPreferences.output_format_template,
+            input_languages: inputLanguages,
+            output_format_template: outputFormatTemplates,
             model_type: 'pro',
             consultation_mode: 'dictation',
           };
 
+          const createSessionBody = {
+            session_id: sessionId,
+            templates: outputTemplates,
+            language_hint: inputLanguage,
+            model: 'pro',
+            transcript_language: userLevelPreferences.output_language || 'en-IN',
+            upload_type,
+            communication_protocol: 'http',
+            session_mode: 'dictation',
+            ...(patient_details ? { patient_details } : {}),
+            additional_data: additionalData,
+          };
+
+          if (partner_context) {
+            console.log('[partner-session] 3. POSTED TO API  POST /voice/v1/sessions?version=v2', {
+              body: createSessionBody,
+              note: 'fields the API schema does not declare are dropped server-side',
+            });
+          }
+
           const response = await with401Retry(
-            () =>
-              sdkService.createSession(
-                {
-                  session_id: sessionId,
-                  templates: outputTemplates,
-                  language_hint: inputLanguage,
-                  model: 'pro',
-                  transcript_language: userLevelPreferences.output_language || 'en-IN',
-                  upload_type,
-                  communication_protocol: 'http',
-                  session_mode: 'dictation',
-                  additional_data: additionalData,
-                },
-                'v2'
-              ),
+            () => sdkService.createSession(createSessionBody, 'v2'),
             'create session'
           );
+
+          if (partner_context) {
+            console.log('[partner-session] 3b. API REPLIED', {
+              success: response.success,
+              session_id: response.success ? response.data?.session_id : undefined,
+              error: response.success ? undefined : response.error,
+            });
+          }
 
           if (!response.success || !response.data) {
             // txn_limit_exceeded → show upgrade modal
@@ -181,6 +248,25 @@ export function useSessionLifecycle() {
             additional_data: additionalData,
             session_config: newSessionConfig,
           });
+
+          // A partner-supplied title goes the same route the doctor's own title
+          // edits take: session_details on PATCH. The create route ignores
+          // session_details entirely, so setting it in the create body is a no-op.
+          const partnerTitle = title?.trim();
+          if (partnerTitle) {
+            const nextDetails = { title: partnerTitle };
+            store.setSessionV2Content(session_id, { session_details: nextDetails });
+            with401Retry(
+              () =>
+                getSDK().sessions.patchSessionStatus(
+                  { session_details: nextDetails } as unknown as Parameters<
+                    ReturnType<typeof getSDK>['sessions']['patchSessionStatus']
+                  >[0],
+                  session_id
+                ),
+              'patch partner session title'
+            ).catch(() => {});
+          }
 
           setSessionContext(session_id);
           tracker.log({

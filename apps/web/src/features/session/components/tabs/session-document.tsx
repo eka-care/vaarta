@@ -35,7 +35,7 @@ const WysiwygEditor = dynamic(() => import('../editor/tiptap-wysiwyg-editor'), {
 export type SessionDocumentHandle = {
   getDocumentId: () => string;
   getMarkdown: () => string;
-  save: () => void;
+  save: () => Promise<unknown>;
 };
 
 type CommonProps = {
@@ -245,9 +245,7 @@ const DocumentView = forwardRef<SessionDocumentHandle, DocumentProps>(function D
     () => ({
       getDocumentId: () => documentId,
       getMarkdown,
-      save: () => {
-        saveDocument();
-      },
+      save: saveDocument,
     }),
     [documentId, getMarkdown, saveDocument]
   );
