@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Demo EMR — Scribe handoff</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
+  .wrap { max-width: 820px; margin: 40px auto; padding: 0 20px; }
+  .card { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 22px; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .muted { color: #666; font-size: 13px; }
+  button { font: 15px system-ui; padding: 10px 18px; border-radius: 7px; border: 1px solid #c8ccd0;
+           background: #fff; cursor: pointer; margin-right: 8px; }
+  button.primary { background: #1a6ef5; border-color: #1a6ef5; color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { background: #0d1117; color: #3fb950; padding: 12px; border-radius: 8px; height: 300px;
+        overflow: auto; white-space: pre-wrap; font: 12px/1.6 ui-monospace, monospace; margin: 0; }
+  .row { display: flex; gap: 10px; align-items: baseline; }
+  .k { color: #888; width: 130px; flex: none; font-size: 13px; }
+  .warn { background: #fff8e6; border-color: #f0d68a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>Demo EMR</h1>
+    <div class="muted">A stand-in for a partner EMR. This page never touches Scribe's cookies or
+    tokens — it only opens a window and talks to it over <code>postMessage</code>.</div>
+    <div style="margin-top:16px">
+      <div class="row"><div class="k">Patient</div><div>Anita Rao · 34 · F</div></div>
+      <div class="row"><div class="k">Appointment</div><div>appt_10294</div></div>
+      <div class="row"><div class="k">Scribe origin</div><div id="origin"></div></div>
+      <div class="row"><div class="k">This page</div><div id="self"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <button id="start" class="primary">Start Scribe session</button>
+    <button id="refire">Re-fire while live (should be rejected)</button>
+    <button id="clear">Clear log</button>
+  </div>
+
+  <div class="card">
+    <pre id="log"></pre>
+  </div>
+
+  <div class="card warn">
+    <b>If nothing happens:</b> this page must be served over http, not opened as a
+    <code>file://</code> document. A file page has origin <code>"null"</code>, which
+    <code>postMessage</code> cannot target, so Scribe deliberately refuses to reply to it.
+    Serve this folder and open it over http — see the terminal command you were given.
+  </div>
+
+</div>
+
+<script>
+  // Point at wherever Scribe is running.
+  var SCRIBE_ORIGIN = 'http://localhost:8000';
+  document.getElementById('origin').textContent = SCRIBE_ORIGIN;
+  document.getElementById('self').textContent = window.location.origin +
+    (window.location.protocol === 'file:' ? '  ←  file:// will NOT work, see below' : '');
+
+  var logEl = document.getElementById('log');
+  function log(ev, data) {
+    var line = new Date().toLocaleTimeString() + '  ' + ev +
+      (data !== undefined ? '  ' + JSON.stringify(data) : '');
+    logEl.textContent += line + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log('[EMR]', ev, data || '');
+  }
+  document.getElementById('clear').onclick = function () { logEl.textContent = ''; };
+
+  function fire(label) {
+    log('createSession() — ' + label);
+    var r = window.EkaScribe.createSession({
+      // Partner override. Ids MUST exist in that doctor's workspace, or session
+      // creation fails with "Template '<id>' is not available" and the partner only
+      // sees a generic create_session_failed. Leave this out to use the doctor's own
+      // defaults — but a fresh account's stored default can be stale, which is exactly
+      // how this failed the first time. GET /voice/api/v1/template lists valid ids.
+      templates: ['f76716aa-b4ff-44ae-af89-e3106c0c6098'],   // "Quick Notes · Everyday Meetings"
+
+      // ['auto_detect'] lets Scribe pick (sent as en-hi). Or ['en-IN','hi'].
+      language_hint: ['auto_detect'],
+
+      // Goes to the backend verbatim, every key. `title` is ALSO applied as the
+      // session's own title — it shows in Scribe's title field and the doctor
+      // can edit it from there.
+      additional_data: {
+        title: 'Anita Rao — follow-up',
+        attendees: 'Dr Mehta, Anita Rao',
+        appointment_id: 'appt_10294',
+        emr_patient_ref: 'EMR-777'
+      },
+
+      patient_details: { name: 'Anita Rao', age: '34', gender: 'F', mobile: 9999999999 },
+
+      onAck:     function (x) { log('✅ onAck — session created', x); },
+      onStatus:  function (x) { log('   onStatus', x); },
+      onPublish: function (x) {
+        log('✅ onPublish — notes came back', {
+          session_id: x.session_id,
+          documents: (x.documents || []).map(function (d) {
+            return { name: d.document_name, template: d.template_id,
+                     status: d.status, presigned_url: d.presigned_url ? 'yes' : null };
+          })
+        });
+      },
+      onError:   function (x) { log('❌ onError', x); },
+      onClose:   function ()  { log('   onClose — Scribe window closed'); }
+    });
+    log('   handoff ids', r);
+  }
+
+  document.getElementById('start').onclick  = function () { fire('first call'); };
+  document.getElementById('refire').onclick = function () { fire('re-fire'); };
+
+  log('EMR page loaded. Click "Start Scribe session".');
+</script>
+<script src="http://localhost:8000/scribe-embed.js"></script>
+</body>
+</html>

@@ -96,13 +96,28 @@ const ProtectedRouteGuard = ({ children }: Props) => {
     if (pathname === '/' && !entryResolvedRef.current) {
       entryResolvedRef.current = true;
       (async () => {
-        if (useVoice2RxStore.getState().sessionV2Ongoing.recording_session_id) {
+        // Re-read rather than close over: resolving the latest session takes a
+        // couple of round trips, and a session can be created underneath us in
+        // the meantime (a partner handoff does exactly this). Landing the user
+        // on their previous session then would strand them away from the live one.
+        const hasOngoing = () =>
+          Boolean(useVoice2RxStore.getState().sessionV2Ongoing.recording_session_id);
+
+        if (hasOngoing()) {
           router.replace('/new-session');
           return;
         }
         const latestId = await fetchLatestSessionId();
+        if (hasOngoing()) {
+          router.replace('/new-session');
+          return;
+        }
         if (latestId) {
           await loadSessionDetails(latestId);
+          if (hasOngoing()) {
+            router.replace('/new-session');
+            return;
+          }
           router.replace(`/session/${latestId}` as any);
         } else {
           router.replace('/new-session');
