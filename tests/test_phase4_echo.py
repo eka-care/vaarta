@@ -56,16 +56,27 @@ def test_file_prompt_provider_missing_raises(tmp_path):
         asyncio.run(FilePromptProvider(prompt_dir=str(tmp_path)).get_prompt("nope"))
 
 
-def test_seeded_prompts_resolve():
-    """Every checked-in agent prompt (scribe/prompts/files/*.md) must load
-    and parse through scribe's file prompt loader."""
-    from scribe.prompts.prompt_files import _PROMPTS_DIR, load_parsed_prompt_from_file
+@pytest.mark.parametrize("mode", ["general", "medical"])
+def test_seeded_prompts_resolve(monkeypatch, mode):
+    """Every checked-in agent prompt of every mode
+    (scribe/modes/<mode>/prompts/*.md) must load and parse through scribe's
+    file prompt loader."""
+    from scribe_core.settings import get_settings
+    from scribe.modes import get_mode_profile, reset_mode_profile
+    from scribe.prompts.prompt_files import load_parsed_prompt_from_file
 
-    files = sorted(_PROMPTS_DIR.glob("*.md"))
-    assert files, "no prompt files checked in under scribe/prompts/files"
-    for f in files:
-        parsed = load_parsed_prompt_from_file(f.stem)
-        assert parsed is not None, f"prompt failed to load/parse: {f.name}"
+    monkeypatch.setenv("APP_MODE", mode)
+    get_settings.cache_clear()
+    reset_mode_profile()
+    try:
+        files = sorted(get_mode_profile().prompts_dir.glob("*.md"))
+        assert files, f"no prompt files checked in for mode {mode}"
+        for f in files:
+            parsed = load_parsed_prompt_from_file(f.stem)
+            assert parsed is not None, f"prompt failed to load/parse: {f.name}"
+    finally:
+        get_settings.cache_clear()
+        reset_mode_profile()
 
 
 

@@ -6,6 +6,7 @@ import {
   Play,
   Printer,
   RotateCcwIcon,
+  Send,
   Square,
   Trash2,
 } from 'lucide-react';
@@ -67,19 +68,26 @@ export function getDocumentFooterConfig({
   onCopy,
   onPrint,
   onDownload,
+  onPublish,
   saveStatus,
   copyDisabled,
   printDisabled,
   downloadDisabled,
+  publishDisabled,
+  publishLabel,
 }: {
   onCopy: () => void;
   onPrint: () => void;
   // Omitted on hosts without native HTML->PDF, so the button is left out rather than dead.
   onDownload?: () => void;
+  // Partner-started sessions only; omitted elsewhere so there's no dead button.
+  onPublish?: () => void;
   saveStatus: SaveStatusState;
   copyDisabled?: boolean;
   printDisabled?: boolean;
   downloadDisabled?: boolean;
+  publishDisabled?: boolean;
+  publishLabel?: string;
 }): TabFooterConfig {
   return {
     saveStatus,
@@ -111,6 +119,18 @@ export function getDocumentFooterConfig({
               disabled: downloadDisabled,
               tooltip: 'Save these notes as a PDF',
               className: DOC_BUTTON_CLASS,
+            } satisfies FooterButton,
+          ]
+        : []),
+      ...(onPublish
+        ? [
+            {
+              key: 'publish',
+              label: publishLabel || 'Publish',
+              icon: <Send className="w-4 h-4" />,
+              onClick: onPublish,
+              disabled: publishDisabled,
+              tooltip: 'Send these notes back to the app that started this session',
             } satisfies FooterButton,
           ]
         : []),

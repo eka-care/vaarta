@@ -24,6 +24,7 @@ import { useContextEditor } from '../hooks/context/use-context-editor';
 import { useSessionContext } from '../hooks/context/use-session-context';
 import { useSessionTabs } from '../hooks/use-session-tabs';
 import { useSessionView } from '../hooks/use-session-view';
+import { usePublishToPartner } from '@/features/partner-session/hooks/use-publish-to-partner';
 import { copyMarkdownToClipboard } from '../utils/copy-output-utils';
 import { toast } from 'sonner';
 import { ContextTabContentHandle } from './tabs/context-tab-content';
@@ -177,6 +178,22 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
     [streamAgUiRun]
   );
 
+  const { isPartnerSession, isPublishing, publishedAt, publish } = usePublishToPartner(sessionId);
+
+  const handlePublishDocument = useCallback(() => {
+    void publish(async () => {
+      await documentRef.current?.save();
+    });
+  }, [publish]);
+
+  const handlePublishStream = useCallback(() => {
+    void publish(async () => {
+      await streamRef.current?.save();
+    });
+  }, [publish]);
+
+  const publishLabel = isPublishing ? 'Publishing…' : publishedAt ? 'Publish again' : 'Publish';
+
   // Copies active document markdown to clipboard
   const handleCopyDocument = useCallback(async () => {
     const md = documentRef.current?.getMarkdown() || activeDoc?.content;
@@ -255,10 +272,13 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
                 if (docId) await handleDownloadDocument(docId);
               }
             : undefined,
+          onPublish: isPartnerSession ? handlePublishStream : undefined,
           saveStatus: isDone ? saveStatus : 'generating',
           copyDisabled: !isDone,
           printDisabled: !isDone || !streamDocId,
           downloadDisabled: !isDone || !streamDocId,
+          publishDisabled: !isDone || isPublishing,
+          publishLabel,
         });
       }
 
@@ -304,10 +324,13 @@ const SessionBody = ({ sessionId, onAddTranscript, isLimitExceeded }: SessionBod
                 await handleDownloadDocument(activeDoc.document_id, activeDoc.document_name);
               }
             : undefined,
+          onPublish: isPartnerSession ? handlePublishDocument : undefined,
           saveStatus,
           copyDisabled: !hasContent,
           printDisabled: !hasContent,
           downloadDisabled: !hasContent,
+          publishDisabled: !hasContent || isPublishing,
+          publishLabel,
         });
       }
 

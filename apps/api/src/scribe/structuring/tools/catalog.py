@@ -1,17 +1,25 @@
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
 from typing import Dict, List, Optional, Type
 
 import yaml
 from scribe.core.custom_logger import get_logger
 from pydantic import BaseModel, ConfigDict
 
-from .generic import DISABLED_TOOLS, NAME_TO_TOOL, _GenericEmitTool
+from scribe.modes import get_mode_profile
+
+from .generic import DISABLED_TOOLS, _GenericEmitTool
 
 logger = get_logger(__name__)
 
-_TOOL_PROMPTS_PATH = Path(__file__).parent / "tool_prompts.yaml"
+
+def name_to_tool() -> Dict[str, Type[_GenericEmitTool]]:
+    """Emit-tool registry of the active mode (name -> class, prompt order)."""
+    return {
+        name: cls
+        for name, cls in get_mode_profile().tool_classes.items()
+        if name not in DISABLED_TOOLS
+    }
 
 
 class RouteAway(BaseModel):
@@ -43,20 +51,21 @@ class ToolPromptsConfig(BaseModel):
 
 @lru_cache(maxsize=1)
 def load_tool_prompts() -> ToolPromptsConfig:
+    """The active mode's tool_prompts.yaml, cross-checked against its tools."""
+    path = get_mode_profile().tool_prompts_path
     try:
-        raw = yaml.safe_load(_TOOL_PROMPTS_PATH.read_text(encoding="utf-8"))
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         config = ToolPromptsConfig.model_validate(raw)
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to load tool prompts from {_TOOL_PROMPTS_PATH}: {e}"
-        ) from e
+        raise RuntimeError(f"Failed to load tool prompts from {path}: {e}") from e
 
     # Disabled tools keep their yaml entries so re-enabling is a one-line change.
-    missing = set(NAME_TO_TOOL) - set(config.tools)
-    unknown = set(config.tools) - set(NAME_TO_TOOL) - DISABLED_TOOLS
+    registry = name_to_tool()
+    missing = set(registry) - set(config.tools)
+    unknown = set(config.tools) - set(registry) - DISABLED_TOOLS
     if missing or unknown:
         raise RuntimeError(
-            f"tool_prompts.yaml out of sync with NAME_TO_TOOL registry: "
+            f"{path} out of sync with the mode's tool registry: "
             f"missing={sorted(missing)}, unknown={sorted(unknown)}"
         )
     return config
@@ -73,17 +82,18 @@ class ToolCatalog:
 
     def __init__(self, config: Optional[ToolPromptsConfig] = None) -> None:
         self._config = config or load_tool_prompts()
+        self._registry = name_to_tool()
 
     def _spec(self, name: str) -> ToolSpec:
         return ToolSpec(
             name=name,
-            tool_cls=NAME_TO_TOOL[name],
+            tool_cls=self._registry[name],
             prompt=self._config.tools[name],
         )
 
     def all_specs(self) -> List[ToolSpec]:
-        """Every registered emit tool — the full default toolset."""
-        return [self._spec(name) for name in NAME_TO_TOOL]
+        """Every emit tool of the active mode — the full default toolset."""
+        return [self._spec(name) for name in self._registry]
 
     def render_tools_available(self, specs: List[ToolSpec]) -> str:
         """Render the {{tools_available}} prompt block for the enabled set."""
@@ -145,3 +155,10 @@ def get_tool_catalog() -> ToolCatalog:
     if _catalog is None:
         _catalog = ToolCatalog()
     return _catalog
+
+
+def reset_tool_catalog() -> None:
+    """Drop cached catalog + prompts (tests switch APP_MODE at runtime)."""
+    global _catalog
+    _catalog = None
+    load_tool_prompts.cache_clear()

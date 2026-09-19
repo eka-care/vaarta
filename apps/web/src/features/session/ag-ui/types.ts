@@ -1,13 +1,31 @@
 /**
- * FE mirrors of the AG-UI ScribeState shapes from voice2rx-be
- * (voice2rx/services/templates/ag_ui/payloads.py).
+ * FE mirrors of the AG-UI ScribeState shapes from the backend
+ * (apps/api/src/scribe/structuring/payloads.py).
  *
- * The BE collapsed all medical-specific kinds into four generic render
- * kinds: LIST, TABLE, KEY_VALUE, NARRATIVE. The LLM picks the kind that
- * fits a doctor-template heading and fills the payload with markdown.
+ * Four generic render kinds — LIST, TABLE, KEY_VALUE, NARRATIVE — plus the
+ * clinical kinds the medical mode emits. Every clinical kind is table-shaped
+ * ({headers, rows}) and renders through the table body; the kind is kept on
+ * the section so the backend can re-validate edits later.
  */
 
-export type SectionKind = 'LIST' | 'TABLE' | 'KEY_VALUE' | 'NARRATIVE';
+export type GenericSectionKind = 'LIST' | 'TABLE' | 'KEY_VALUE' | 'NARRATIVE';
+
+export type ClinicalSectionKind =
+  | 'MEDICATION_TABLE'
+  | 'PROCEDURES'
+  | 'LAB_RESULTS'
+  | 'LAB_INVESTIGATIONS'
+  | 'VITAL_TABLE'
+  | 'PATIENT_MEDICAL_HISTORY'
+  | 'DIAGNOSIS'
+  | 'EXAMINATION_FINDINGS';
+
+export type SectionKind = GenericSectionKind | ClinicalSectionKind;
+
+// Kinds whose payload is {headers, rows}: TABLE and every clinical kind.
+export function isTableKind(kind: string): boolean {
+  return kind !== 'LIST' && kind !== 'KEY_VALUE' && kind !== 'NARRATIVE';
+}
 
 export type SectionStatusState =
   | 'pending'

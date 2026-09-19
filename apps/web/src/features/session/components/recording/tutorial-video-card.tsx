@@ -7,8 +7,10 @@ import { TUTORIAL_CARD_THUMBNAIL_SRC } from '@/constants/tutorial';
 import { MIXPANEL_EVENT_NAME, MIXPANEL_EVENT_TYPE } from '@/constants/enums';
 import { tracker } from '@/analytics';
 import { useTutorialVideo } from '@/shared-hooks/use-tutorial-video';
+import { useAppName } from '@/config/app-branding';
 
 function TutorialVideoCard() {
+  const appName = useAppName();
   const { showCard, openTutorial, dismissCard } = useTutorialVideo();
 
   const handleWatch = useCallback(() => {
@@ -41,7 +43,7 @@ function TutorialVideoCard() {
           <div className="flex min-h-px w-full flex-1 items-center justify-center gap-1">
             <Play className="size-4 shrink-0 text-primary" fill="currentColor" />
             <span className="whitespace-nowrap text-sm font-medium leading-5 text-foreground">
-              New to Vaarta? Watch a short tour.
+              New to {appName}? Watch a short tour.
             </span>
           </div>
         </div>

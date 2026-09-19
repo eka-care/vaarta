@@ -62,3 +62,16 @@ is served by the api itself, so no host is baked into the bundle. hosts.ts also
 publishes `globalThis.__SCRIBE_HOSTS__` for the vendored ekascribe-ts-sdk.
 The alliance SDK's SharedWorker is self-hosted (`public/msa/`). Non-scribe
 features and all trackers are env-gated (src/config/features.ts).
+
+## Modes (scribe/modes)
+
+`APP_MODE` picks a `ModeProfile` (`general` | `medical`): the emit-tool
+registry the AG-UI agent gets, the mode's `prompts/*.md` (structuring +
+template authoring), `tool_prompts.yaml` (per-tool prose rendered into the
+system prompt) and `seed_data.yaml`. `scribe/structuring/` stays
+domain-agnostic; the medical mode adds eight clinical table kinds
+(`MEDICATION_TABLE`, `VITAL_TABLE`, `LAB_RESULTS`, `LAB_INVESTIGATIONS`,
+`PROCEDURES`, `DIAGNOSIS`, `EXAMINATION_FINDINGS`, `PATIENT_MEDICAL_HISTORY`)
+as pure validate-and-emit tools — no formulary/catalog lookups. `APP_NAME`
+is served to the frontend by `/connect-auth/v1/auth-mode` and used as the
+discovery document's `service_name`.

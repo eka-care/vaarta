@@ -59,6 +59,19 @@ const handleUserRedirectAfterLogout = () => {
     // no-op: fall through to the normal login redirect
   }
 
+  // A partner handoff popup must come back to /embed; landing on '/' sends it
+  // through the entry gate, which races the handoff.
+  if (window.location.pathname.startsWith('/embed')) {
+    const separator = redirectURL.includes('?') ? '&' : '?';
+    try {
+      window.history.replaceState(null, '', '/logged-out');
+    } catch {
+      // no-op
+    }
+    window.location.replace(`${redirectURL}${separator}next=%2Fembed`);
+    return;
+  }
+
   // Already on the login page (or another /auth screen) — nothing to redirect.
   if (window.location.pathname.startsWith('/auth')) {
     logoutInFlight = false; // allow a future logout cycle from the app

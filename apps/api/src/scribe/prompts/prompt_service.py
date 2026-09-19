@@ -1,8 +1,8 @@
 """
 File-backed prompt service.
 
-Prompts live as .md files in scribe/prompts/files/ and are loaded into an
-in-memory cache on first use (template *content* lives in the database; these
+Prompts live as .md files in scribe/modes/<APP_MODE>/prompts/ and are loaded
+into an in-memory cache on first use (template *content* lives in the database; these
 files carry only agent system prompts). Variables use {{name}} placeholders.
 """
 
@@ -15,7 +15,7 @@ from .prompt_parser import ParsedAgentPrompt
 
 logger = get_logger(__name__)
 
-# agent key -> prompt file name (without .md) in scribe/prompts/files/
+# agent key -> prompt file name (without .md) in scribe/modes/<mode>/prompts/
 AGENT_PROMPT_NAMES = {
     "agentic_ui_v2": "agentic_ui_system_prompt_v2",
     "template_authoring": "template_authoring_agent",
@@ -45,7 +45,7 @@ class FilePromptService:
             return parsed
         raise FileNotFoundError(
             f"Prompt not found for agent '{agent_key}' "
-            f"(missing or invalid file: scribe/prompts/files/{prompt_name}.md)"
+            f"(missing or invalid file: scribe/modes/<mode>/prompts/{prompt_name}.md)"
         )
 
 

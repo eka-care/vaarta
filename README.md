@@ -35,6 +35,33 @@ kubectl -n eka-care port-forward svc/ekascribe-api 8000:8000
 
 Secrets and details: `deploy/k8s/README.md`.
 
+## Modes and branding
+
+The same image runs as a meeting/notes scribe or a clinical scribe:
+
+```
+APP_MODE=general   # default — 4 generic section tools, GoI meeting templates
+APP_MODE=medical   # + 8 clinical section tools (medications, vitals, labs, diagnosis…),
+                   #   clinical system prompt, templates: Clinical Notes / SOAP / Prescription Print
+APP_NAME=Vaarta    # display name (title, login page, sidebar, print header) — no rebuild needed
+```
+
+```bash
+make start MODE=medical         # local: pins APP_MODE in .env, builds, seeds medical templates, starts
+make start-prod MODE=medical    # prod VM, same
+make reseed MODE=general        # switch an existing DB: wipe the template directory, seed the mode's
+                                # templates, restart api (users/sessions/custom templates untouched)
+make reset-db MODE=medical      # DESTRUCTIVE: drop postgres + storage volumes and start fresh
+```
+(`reseed-prod` / `reset-db-prod` for the prod compose file.)
+
+Everything mode-specific lives under `apps/api/src/scribe/modes/<mode>/`
+(profile, prompts, `tool_prompts.yaml`, `seed_data.yaml`); the structuring
+engine in `scribe/structuring/` is shared. `scripts/setup.py` seeds the
+active mode's templates (`seed_mode: replace` archives directory templates
+of the other mode). The frontend reads `app_name`/`app_mode` from
+`GET /connect-auth/v1/auth-mode` at startup.
+
 ## Docs
 
 - `docs/architecture.md` — how the pieces fit

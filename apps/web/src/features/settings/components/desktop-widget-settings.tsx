@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import PreferenceCard from '@/features/settings/components/preference-card';
 import SingleSelectInput from '@/shared-components/input/single-select-input';
 import { useDesktopSettings } from '@/platform';
+import { useAppName } from '@/config/app-branding';
 
 export type NotificationPrefs = {
   joinVideoConferencingAndStartTranscribing: boolean;
@@ -360,6 +361,7 @@ const DesktopWidgetSettings = ({
   prefs,
   onTogglePref,
 }: DesktopWidgetSettingsProps) => {
+  const appName = useAppName();
   const [isCustomKeyHovered, setIsCustomKeyHovered] = useState(false);
 
   return (
@@ -374,7 +376,7 @@ const DesktopWidgetSettings = ({
                   <p className="font-semibold text-sm leading-5">Quick access shortcut</p>
                 </div>
                 <div className="text-xs text-muted-foreground leading-4">
-                  Trigger the Vaarta widget from anywhere on your desktop
+                  Trigger the {appName} widget from anywhere on your desktop
                 </div>
               </div>
               <Switch

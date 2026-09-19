@@ -165,6 +165,10 @@ def auth_mode():
             ],
             "allow_signup": _signup_open(),
             "login_url": "/auth/login",
+            # Deployment branding + product mode (APP_NAME / APP_MODE); the
+            # frontend is a static bundle, so it reads these at runtime.
+            "app_name": s.app_name,
+            "app_mode": s.app_mode,
         },
         200,
     )

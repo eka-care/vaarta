@@ -19,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@ui/src';
 import { VaartaLogoLottie } from '@/shared-components/vaarta-logo-lottie';
+import { useAppName } from '@/config/app-branding';
 
 type Phase = 'loading' | 'ready' | 'submitting' | 'approved' | 'denied' | 'error';
 
@@ -28,6 +29,7 @@ const normalizeCode = (raw: string): string => {
 };
 
 export default function ActivatePage() {
+  const appName = useAppName();
   const [phase, setPhase] = useState<Phase>('loading');
   const [typedCode, setTypedCode] = useState('');
   const [username, setUsername] = useState('');
@@ -130,7 +132,7 @@ export default function ActivatePage() {
             </div>
 
             <p className="text-center text-sm">
-              <span className="font-medium">Vaarta Desktop</span> wants to sign in
+              <span className="font-medium">{appName} Desktop</span> wants to sign in
               {username ? (
                 <>
                   {' '}as <span className="font-medium">{username}</span>

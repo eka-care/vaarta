@@ -1,5 +1,5 @@
 # Applies the app schema + procrastinate schema and seeds the default sections
-# and templates (templates/seed_data.yaml). Same invocation the Makefile's
+# and templates (apps/api/src/scribe/modes/<APP_MODE>/seed_data.yaml). Same invocation the Makefile's
 # `make start` target uses against the compose stack.
 #
 # Job specs are largely immutable, so re-applying after an image tag change

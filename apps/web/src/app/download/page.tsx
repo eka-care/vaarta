@@ -6,9 +6,9 @@ import { FeatureCards } from '@/features/download/components/feature-cards';
 import { DownloadFooter } from '@/features/download/components/download-footer';
 
 export const metadata: Metadata = {
-  title: 'Download Vaarta — The ambient AI Scribe',
+  title: 'Download — The ambient AI Scribe',
   description:
-    'Vaarta listens to any conversation — meetings, interviews, calls — and turns it into clear, structured notes. Download for MacOS or Windows.',
+    'Listens to any conversation — meetings, interviews, calls — and turns it into clear, structured notes. Download for MacOS or Windows.',
 };
 
 const DownloadPage = () => {

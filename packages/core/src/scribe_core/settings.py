@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     blob_via_api: bool = False
     aws_region: str = "ap-south-1"
 
+    # --- Product mode / branding -------------------------------------------
+    # general: meeting/notes scribe (4 generic section tools, GoI templates)
+    # medical: clinical scribe (adds the 8 clinical section tools, clinical
+    #          system prompt and templates). Picks scribe/modes/<app_mode>/.
+    app_mode: Literal["general", "medical"] = "general"
+    # Display name shown by the frontend (title, login page, sidebar, print)
+    # and advertised as service_name in the discovery document.
+    app_name: str = "Vaarta"
+
     # --- Database -----------------------------------------------------------
     database_url: str = "postgresql://scribe:scribe@localhost:5432/scribe"
 

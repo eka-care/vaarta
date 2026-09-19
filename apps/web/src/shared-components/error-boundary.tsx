@@ -4,6 +4,7 @@ import { RefreshCcw } from 'lucide-react';
 import ErrorBoundaryImage from '../../public/assets/error-boundary.svg';
 import Image from 'next/image';
 import { tracker } from '@/analytics';
+import { getAppName } from '@/config/app-branding';
 
 interface Props {
   children: ReactNode;
@@ -53,7 +54,7 @@ class ErrorBoundary extends Component<Props, State> {
             <p className="text-destructive text-sm">{this.state.error?.message}</p>
             <div className="flex flex-col items-center text-center space-y-2">
               <p className="text-lg sm:text-xl md:text-2xl leading-6 md:leading-8 font-semibold">
-                There was a problem while loading Vaarta
+                There was a problem while loading {getAppName()}
               </p>
               <p className="text-secondary-foreground text-sm">
                 Please try reloading the page again to fix the issue.

@@ -1,9 +1,9 @@
 """
 Backend tools for the AG-UI note flow.
 
-LLM-callable BaseTools — one per SectionKind — plus save_scribe_state,
-an internal helper the run service calls on RUN_FINISHED (not exposed to
-the LLM).
+The four generic LLM-callable BaseTools (one per generic SectionKind), the
+mode-aware ToolCatalog, plus save_scribe_state, an internal helper (not
+exposed to the LLM).
 """
 
 from .generic import (

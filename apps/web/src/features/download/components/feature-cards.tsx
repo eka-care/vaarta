@@ -1,5 +1,8 @@
+'use client';
+
 import { Check, Plus, Search, X } from 'lucide-react';
 import './feature-cards.css';
+import { useAppName } from '@/config/app-branding';
 
 // Cards keep their designed 310x295 footprint at every breakpoint — their inner
 // artwork is positioned against that box — and the grid reflows around them.
@@ -122,11 +125,12 @@ function MultilingualCard() {
 }
 
 function TemplatesCard() {
+  const appName = useAppName();
   return (
     <div className={CARD_CLASS} style={CARD_GLOW}>
       <CardHeading
         title="Templates"
-        body="Choose from ready-made note formats, or build and save your own. Vaarta fills them in automatically."
+        body={`Choose from ready-made note formats, or build and save your own. ${appName} fills them in automatically.`}
       />
       <CardPanel eyebrow="Templates">
         <div className="flex w-full items-center gap-1">
@@ -175,11 +179,12 @@ function TemplatesCard() {
 }
 
 function AddContextCard() {
+  const appName = useAppName();
   return (
     <div className={CARD_CLASS} style={CARD_GLOW}>
       <CardHeading
         title="Add context"
-        body="Type extra context, attach documents, or link past notes. Vaarta takes it all into account when writing the note."
+        body={`Type extra context, attach documents, or link past notes. ${appName} takes it all into account when writing the note.`}
       />
       <CardPanel eyebrow="Add context">
         {/* On hover the note types itself out, then the attachment lands under it. */}
