@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { getStorage } from '@/platform';
 import useVoice2RxStore from '@/store/store';
+import { useAppMode } from '@/config/app-branding';
 
 const DESKTOP_APP_POPUP_DISMISSED_KEY = 'ekascribe:desktop-app-popup-dismissed';
 
@@ -15,7 +16,9 @@ export const useDesktopAppPopup = (
 ) => {
   const isLoggedIn = useVoice2RxStore((state) => !!state.loggedInUserDetails);
   const [isDismissed, setIsDismissed] = useState(isDismissedInThisTab);
-  const isOpen = enabled && isLoggedIn && !isDismissed;
+  // Medical deployments don't promote the desktop app.
+  const isMedicalMode = useAppMode() === 'medical';
+  const isOpen = enabled && isLoggedIn && !isDismissed && !isMedicalMode;
 
   const dismiss = useCallback(() => {
     getStorage().session.set(DESKTOP_APP_POPUP_DISMISSED_KEY, 'true');

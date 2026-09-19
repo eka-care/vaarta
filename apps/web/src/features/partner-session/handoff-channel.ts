@@ -18,10 +18,8 @@ import {
 
 type Peer = { window: Window; origin: string };
 
-// The partner pings every 3s while its page is alive. No ping in this long and
-// the opener has navigated away or reloaded, so its listener no longer exists:
-// posting into it would succeed silently and the doctor would be told the notes
-// were sent when nothing received them.
+// The partner pings every 3s while alive. Silence this long means its listener is
+// gone, and posting into it would succeed silently while nothing receives it.
 const PEER_LIVENESS_MS = 10_000;
 
 // Bounded so a long-lived tab that starts many sessions can't grow this forever.
@@ -88,9 +86,8 @@ function sendAck(requestId: string, ack: PartnerOutboundMessage) {
   post(ack);
 }
 
-// Session-bound events go only to the origin that started that session — with no
-// allowlist configured, any site can open Scribe, and without this it could also
-// receive another partner's status and published notes.
+// Session-bound events go only to the origin that started that session, so one
+// partner never receives another's status or notes.
 function ownerOf(sessionId: string): { handoff_id: string; origin: string } | null {
   const content = useVoice2RxStore.getState().sessionV2ContentById[sessionId];
   const context = getPartnerContext(content);
@@ -99,15 +96,8 @@ function ownerOf(sessionId: string): { handoff_id: string; origin: string } | nu
   return { handoff_id: context.handoff_id, origin: context.origin };
 }
 
-// The backend drops `patient_details`: CreateSessionRequest (server-side) declares
-// no such field, so oid/name/age/gender/mobile are discarded and the stored session
-// has no patient column at all. additional_data is the one channel proven to
-// round-trip, so a copy goes there too — the top-level field is still sent so this
-// starts working by itself the day the backend implements it.
-//
-// `mobile` is typed number in the SDK and validated with zod before the request
-// leaves the browser, so a partner sending "9999999999" as a string fails the whole
-// create with a generic error. Coerce a numeric string rather than lose the session.
+// The backend declares no patient_details field and drops it, so a copy also goes
+// into additional_data. `mobile` is zod-checked as a number: coerce, don't fail.
 function normalisePatientDetails(details?: PatientDetails): PatientDetails | undefined {
   if (!details) return undefined;
   const { mobile, ...rest } = details;
@@ -183,9 +173,8 @@ async function handleCreateSession(
     return;
   }
 
-  // Everything in additional_data goes to the backend as-is. `title` is ALSO
-  // read out of it and applied as the session's own title, so it both persists
-  // as partner data and shows in the UI — it is copied, not moved.
+  // All of additional_data goes to the backend as-is; `title` is also applied as
+  // the session's own title. Copied, not moved.
   const patientDetails = normalisePatientDetails(payload.patient_details);
 
   const partnerAdditionalData: Record<string, unknown> = {

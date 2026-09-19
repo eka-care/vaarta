@@ -66,3 +66,7 @@ export function useAppBranding(): AppBranding {
 export function useAppName(): string {
   return useAppBranding().appName;
 }
+
+export function useAppMode(): AppMode {
+  return useAppBranding().appMode;
+}

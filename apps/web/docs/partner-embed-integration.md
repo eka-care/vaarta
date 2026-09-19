@@ -73,6 +73,8 @@ served from, so there is nothing to configure.
 | `templates` | Overrides the doctor's saved output templates for this session only. **Max 2**, and each id must exist in that doctor's workspace (`GET /voice/api/v1/template`). |
 | `language_hint` | Overrides the doctor's saved input languages for this session only. `['auto_detect']` is sent to the API as `en-hi` (code-mixed) — the backend does no true auto-detection. Valid codes: `en, hi, en-hi, en-IN, en-US, gu, kn, ml, ta, te, bn, mr, pa`. |
 | `additional_data` | Stored on the session verbatim — **every key reaches the backend** and comes back on session fetch. The only free-form channel; keep partner references (appointment id, patient id) here. |
+| `additional_data.attendees` | Shown in Scribe beside the title, where the doctor can edit it. Saved back to `additional_data.attendees`. |
+| `additional_data.callback_url` | On publish, Scribe opens this url in a **new tab** with `session_id`, and a `doc_url` + `document_id` pair per document, appended as query params. http(s) only. Because it is stored on the session, publishing an old session days later still lands there. When set, it replaces the `onPublish` callback. |
 | `additional_data.title` | Also applied as the session's own title: it appears in Scribe's title field and the doctor can edit it. Copied, not moved — it stays in `additional_data` too. |
 | `patient_details` | `oid`, `name`, `age`, `gender`, `mobile` (a **number**). The backend declares no such field and drops it, so Scribe also copies it into `additional_data.patient_details`, which does persist — you get it back on session fetch either way. A numeric `mobile` sent as a string is coerced, because the SDK's zod check would otherwise fail the whole create. |
 
@@ -117,8 +119,9 @@ Presigned urls are minted fresh at publish time. Fetch the content from them; th
 
 ### Reading a published note
 
-`presigned_url` does **not** serve readable text — note bodies are stored base64-encoded.
-Fetch the url, then decode:
+Scribe hands over the **url only**, never the note content — fetch it yourself, ideally
+server-side. `presigned_url` does not serve readable text either: note bodies are stored
+base64-encoded, so decode after fetching:
 
 ```js
 function decodeUnicodeBase64(str) {
@@ -134,6 +137,20 @@ const text = decodeUnicodeBase64(raw);
 
 Transcripts are the exception — those come back as plain text, no decode. Urls are minted at
 publish time and expire, so fetch them promptly rather than storing them.
+
+Note that the blob endpoint does not send CORS headers, so a browser `fetch()` from the
+partner's own origin fails. Fetch these urls from the partner's backend.
+
+### Two ways to receive the notes
+
+| | `onPublish` callback | `additional_data.callback_url` |
+|---|---|---|
+| Delivery | JS function in the EMR page | new tab at `<url>?session_id=…&doc_url=…` |
+| EMR page must still be open | yes | no |
+| Works for a session published days later | no | yes |
+| Set up | pass the function | put the url in `additional_data` |
+
+`callback_url` wins when both are set.
 
 ## Errors
 

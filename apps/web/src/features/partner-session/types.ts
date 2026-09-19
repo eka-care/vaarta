@@ -14,12 +14,8 @@ export type PartnerSessionRequest = {
   language_hint?: string[];
   patient_details?: PatientDetails;
   /**
-   * Everything else the partner wants on this session. Stored verbatim and
-   * returned on session fetch, so it is also where a partner keeps its own
-   * references (appointment id, patient id, …).
-   *
-   * `title` is special: it additionally becomes the session's own title, the
-   * one the doctor sees and can edit. It is copied, not moved.
+   * Stored verbatim and returned on session fetch — where partners keep their own
+   * references. `title` additionally becomes the session's editable title.
    */
   additional_data?: {
     title?: string;

@@ -59,9 +59,8 @@ const handleUserRedirectAfterLogout = () => {
     // no-op: fall through to the normal login redirect
   }
 
-  // A partner handoff popup must come back to /embed. Landing on '/' instead
-  // sends it through the entry gate, which resolves to the doctor's previous
-  // session and races the handoff that is already in flight.
+  // A partner handoff popup must come back to /embed; landing on '/' sends it
+  // through the entry gate, which races the handoff.
   if (window.location.pathname.startsWith('/embed')) {
     const separator = redirectURL.includes('?') ? '&' : '?';
     try {
