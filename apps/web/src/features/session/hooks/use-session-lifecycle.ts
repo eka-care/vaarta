@@ -26,20 +26,12 @@ function teardownSessionMixing() {
   getPlatform().audioCapture?.teardownSessionMixing?.();
 }
 
-// The STT backend accepts explicit codes only (InputLanguage: en, hi, en-hi, en-IN,
-// gu, kn, ml, ta, te, bn, mr, pa) and does no auto-detection — discovery reports
-// auto_detection: false. 'auto_detect' is a client-side preference id with no API
-// equivalent: sent as-is the server resolves it to None, drops it, and rejects the
-// create with "language_hint is required on session create". Code-mixed en-hi is the
-// closest behaviour the backend offers, so that is what it becomes on the wire.
-// The original ids are kept for the UI — only the API payload is translated.
+// 'auto_detect' is a UI-only preference id; the API drops it and then rejects the
+// create. Code-mixed en-hi is the closest the backend offers. UI ids are untouched.
 const AUTO_DETECT_ID = 'auto_detect';
 const AUTO_DETECT_API_EQUIVALENT = 'en-hi';
-// An empty language_hint is always a 400 ("language_hint is required on session
-// create"). That happens whenever the session is created before the user's
-// preferences have loaded — a partner popup opened from another origin gets a
-// fresh sessionStorage, so the persisted store starts empty. Send a valid floor
-// rather than an empty array; a real preference always overrides it.
+// An empty language_hint is always a 400, which happens when a session is created
+// before preferences load (a cross-origin popup starts with an empty store).
 const FALLBACK_API_LANGUAGE = 'en-IN';
 
 function toApiLanguageCodes(ids: string[]): string[] {
@@ -249,9 +241,8 @@ export function useSessionLifecycle() {
             session_config: newSessionConfig,
           });
 
-          // A partner-supplied title goes the same route the doctor's own title
-          // edits take: session_details on PATCH. The create route ignores
-          // session_details entirely, so setting it in the create body is a no-op.
+          // Title goes via PATCH like the doctor's own edits — the create route
+          // ignores session_details entirely.
           const partnerTitle = title?.trim();
           if (partnerTitle) {
             const nextDetails = { title: partnerTitle };

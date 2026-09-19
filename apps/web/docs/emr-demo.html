@@ -2,33 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
 <title>Demo EMR — Scribe handoff</title>
 <style>
   body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
-  .wrap { max-width: 820px; margin: 40px auto; padding: 0 20px; }
+  .wrap { max-width: 860px; margin: 40px auto; padding: 0 20px; }
   .card { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 22px; margin-bottom: 18px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .muted { color: #666; font-size: 13px; }
   button { font: 15px system-ui; padding: 10px 18px; border-radius: 7px; border: 1px solid #c8ccd0;
            background: #fff; cursor: pointer; margin-right: 8px; }
   button.primary { background: #1a6ef5; border-color: #1a6ef5; color: #fff; }
-  button:disabled { opacity: .5; cursor: default; }
-  pre { background: #0d1117; color: #3fb950; padding: 12px; border-radius: 8px; height: 300px;
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  pre { background: #0d1117; color: #3fb950; padding: 12px; border-radius: 8px; height: 320px;
         overflow: auto; white-space: pre-wrap; font: 12px/1.6 ui-monospace, monospace; margin: 0; }
   .row { display: flex; gap: 10px; align-items: baseline; }
-  .k { color: #888; width: 130px; flex: none; font-size: 13px; }
-  .warn { background: #fff8e6; border-color: #f0d68a; }
+  .k { color: #888; width: 140px; flex: none; font-size: 13px; }
+  code { background: #eef0f2; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  #blocker { display: none; background: #fdeaea; border: 2px solid #e05252; color: #7d1d1d;
+             border-radius: 10px; padding: 22px; margin-bottom: 18px; }
+  #blocker h2 { margin: 0 0 8px; font-size: 17px; }
+  #blocker code { background: #f7d5d5; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
+  <div id="blocker">
+    <h2>This page is open as a file — the handoff cannot work</h2>
+    <p>Its origin is <code>"null"</code>. Scribe can receive messages from it, but
+    <code>postMessage</code> has no way to send anything <i>back</i> to a null origin, so
+    Scribe stays silent and the popup sits on &ldquo;Starting your session&hellip;&rdquo; forever.</p>
+    <p style="margin-bottom:0"><b>Serve it over http instead:</b><br>
+    <code>cd ~/Desktop &amp;&amp; python3 -m http.server 8080</code><br>
+    then open <code>http://localhost:8080/emr-demo.html</code></p>
+  </div>
+
   <div class="card">
     <h1>Demo EMR</h1>
     <div class="muted">A stand-in for a partner EMR. This page never touches Scribe's cookies or
-    tokens — it only opens a window and talks to it over <code>postMessage</code>.</div>
+    tokens — it opens a window and talks to it over <code>postMessage</code>.</div>
     <div style="margin-top:16px">
-      <div class="row"><div class="k">Patient</div><div>Anita Rao · 34 · F</div></div>
+      <div class="row"><div class="k">Patient</div><div>Anita Rao &middot; 34 &middot; F</div></div>
       <div class="row"><div class="k">Appointment</div><div>appt_10294</div></div>
       <div class="row"><div class="k">Scribe origin</div><div id="origin"></div></div>
       <div class="row"><div class="k">This page</div><div id="self"></div></div>
@@ -45,79 +61,109 @@
     <pre id="log"></pre>
   </div>
 
-  <div class="card warn">
-    <b>If nothing happens:</b> this page must be served over http, not opened as a
-    <code>file://</code> document. A file page has origin <code>"null"</code>, which
-    <code>postMessage</code> cannot target, so Scribe deliberately refuses to reply to it.
-    Serve this folder and open it over http — see the terminal command you were given.
-  </div>
-
 </div>
 
 <script>
-  // Point at wherever Scribe is running.
-  var SCRIBE_ORIGIN = 'http://localhost:8000';
+  // The Scribe deployment this EMR hands off to.
+  // The ONLY place to set this. The embed script is loaded from it below.
+  var SCRIBE_ORIGIN = 'https://bharat-backend.dev.eka.care';
+
+  var isFile = window.location.protocol === 'file:' || window.location.origin === 'null';
+
   document.getElementById('origin').textContent = SCRIBE_ORIGIN;
-  document.getElementById('self').textContent = window.location.origin +
-    (window.location.protocol === 'file:' ? '  ←  file:// will NOT work, see below' : '');
+  document.getElementById('self').textContent =
+    isFile ? 'file:// — origin "null"' : window.location.origin;
 
   var logEl = document.getElementById('log');
   function log(ev, data) {
-    var line = new Date().toLocaleTimeString() + '  ' + ev +
-      (data !== undefined ? '  ' + JSON.stringify(data) : '');
-    logEl.textContent += line + '\n';
+    logEl.textContent += new Date().toLocaleTimeString() + '  ' + ev +
+      (data !== undefined ? '  ' + JSON.stringify(data) : '') + '\n';
     logEl.scrollTop = logEl.scrollHeight;
     console.log('[EMR]', ev, data || '');
   }
   document.getElementById('clear').onclick = function () { logEl.textContent = ''; };
 
   function fire(label) {
-    log('createSession() — ' + label);
+    log('createSession() - ' + label);
     var r = window.EkaScribe.createSession({
-      // Partner override. Ids MUST exist in that doctor's workspace, or session
-      // creation fails with "Template '<id>' is not available" and the partner only
-      // sees a generic create_session_failed. Leave this out to use the doctor's own
-      // defaults — but a fresh account's stored default can be stale, which is exactly
-      // how this failed the first time. GET /voice/api/v1/template lists valid ids.
-      templates: ['f76716aa-b4ff-44ae-af89-e3106c0c6098'],   // "Quick Notes · Everyday Meetings"
+      // Template ids are per-deployment. Omit to use the doctor's own default, or take an
+      // id from GET /voice/api/v1/template on THIS deployment.
+      // templates: ['<template-id>'],
 
-      // ['auto_detect'] lets Scribe pick (sent as en-hi). Or ['en-IN','hi'].
-      language_hint: ['auto_detect'],
+      language_hint: ['en-IN'],        // or ['en-IN', 'hi']
 
-      // Goes to the backend verbatim, every key. `title` is ALSO applied as the
-      // session's own title — it shows in Scribe's title field and the doctor
-      // can edit it from there.
-      additional_data: {
-        title: 'Anita Rao — follow-up',
-        attendees: 'Dr Mehta, Anita Rao',
-        appointment_id: 'appt_10294',
-        emr_patient_ref: 'EMR-777'
+      patient_details: {                     // mobile must be a NUMBER
+        oid: 'pat-999', name: 'Anita Rao', age: '34', gender: 'F', mobile: 9999999999
       },
 
-      patient_details: { name: 'Anita Rao', age: '34', gender: 'F', mobile: 9999999999 },
+      additional_data: {                     // every key is stored and returned
+        title: 'Anita Rao - follow-up',      // also becomes the session's editable title
+        attendees: 'Dr Mehta, Anita Rao',    // editable in Scribe's UI too
+        appointment_id: 'appt_10294',
+        emr_patient_ref: 'EMR-777',
 
-      onAck:     function (x) { log('✅ onAck — session created', x); },
-      onStatus:  function (x) { log('   onStatus', x); },
+        // On publish Scribe opens this in a new tab with ?session_id=..&doc_url=..
+        // appended. Stored on the session, so publishing an OLD session later
+        // still lands here. Comment out to use the onPublish callback instead.
+        callback_url: window.location.origin + '/emr-callback.html'
+      },
+
+      onAck:    function (x) { log('onAck - session created', x); },
+      onStatus: function (x) { log('   onStatus', x); },
       onPublish: function (x) {
-        log('✅ onPublish — notes came back', {
+        log('onPublish - notes came back', {
           session_id: x.session_id,
           documents: (x.documents || []).map(function (d) {
-            return { name: d.document_name, template: d.template_id,
-                     status: d.status, presigned_url: d.presigned_url ? 'yes' : null };
+            return {
+              name: d.document_name,
+              template: d.template_id,
+              status: d.status,
+              presigned_url: d.presigned_url        // the url itself - fetch it server-side
+            };
           })
         });
       },
-      onError:   function (x) { log('❌ onError', x); },
-      onClose:   function ()  { log('   onClose — Scribe window closed'); }
+      onError:  function (e) { log('onError', e); },
+      onClose:  function ()  { log('   onClose - Scribe window closed'); }
     });
     log('   handoff ids', r);
   }
 
-  document.getElementById('start').onclick  = function () { fire('first call'); };
-  document.getElementById('refire').onclick = function () { fire('re-fire'); };
+  function guard(fn) {
+    return function () {
+      if (isFile) { log('BLOCKED - page is file://, origin is "null". See the red box above.'); return; }
+      if (!window.EkaScribe) {
+        log('scribe-embed.js has not loaded from ' + SCRIBE_ORIGIN + ' - cannot start.');
+        return;
+      }
+      fn();
+    };
+  }
+  document.getElementById('start').onclick  = guard(function () { fire('first call'); });
+  document.getElementById('refire').onclick = guard(function () { fire('re-fire'); });
 
-  log('EMR page loaded. Click "Start Scribe session".');
+  if (isFile) {
+    document.getElementById('blocker').style.display = 'block';
+    document.getElementById('start').disabled = true;
+    document.getElementById('refire').disabled = true;
+    log('BLOCKED - opened as a file:// document. Serve this page over http, see above.');
+  } else {
+    log('EMR page loaded at ' + window.location.origin + '.');
+  }
+
+  // Load the embed script from SCRIBE_ORIGIN so there is only one host to change.
+  if (!isFile) {
+    var tag = document.createElement('script');
+    tag.src = SCRIBE_ORIGIN + '/scribe-embed.js';
+    tag.onload = function () {
+      log('embed script loaded from ' + SCRIBE_ORIGIN + ' - click "Start Scribe session".');
+    };
+    tag.onerror = function () {
+      log('WARNING: could not load ' + SCRIBE_ORIGIN + '/scribe-embed.js.');
+      log('Check the host and scheme - localhost is http, not https.');
+    };
+    document.head.appendChild(tag);
+  }
 </script>
-<script src="http://localhost:8000/scribe-embed.js"></script>
 </body>
 </html>

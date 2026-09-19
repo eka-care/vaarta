@@ -141,6 +141,18 @@
     function createSession(request) {
       var req = request || {};
 
+      // A file:// page has origin "null"; postMessage cannot target it, so Scribe
+      // would receive our hello and have no way to answer. Fail here, with a reason.
+      if (window.location.protocol === 'file:' || window.location.origin === 'null') {
+        callbacks = { onError: req.onError };
+        fail(
+          'unsupported_origin',
+          'This page is open as a file:// document, whose origin is "null". Scribe cannot ' +
+          'postMessage back to it. Serve the page over http(s) and open it that way.'
+        );
+        return null;
+      }
+
       handoffId = randomId('hnd');
       requestId = randomId('req');
       connected = false;
@@ -168,10 +180,8 @@
         listening = true;
       }
 
-      // Never re-navigate a Scribe window that is already open: window.open with a
-      // url would reload it, destroying an in-flight recording before Scribe ever
-      // gets the chance to answer session_in_progress. Reuse it and let the guard
-      // on the Scribe side decide.
+      // Never re-navigate an open Scribe window: window.open with a url reloads it
+      // and destroys an in-flight recording. Reuse it; the Scribe-side guard decides.
       if (!popup || popup.closed) {
         // A named window makes a repeat call reuse the same tab.
         popup = window.open(scribeOrigin + embedPath, windowName, windowFeatures);

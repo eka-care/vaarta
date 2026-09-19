@@ -27,6 +27,8 @@ import DownloadAudioButton from '@/features/session/components/recording/downloa
 import { useSessionLifecycle } from '../hooks/use-session-lifecycle';
 import { useSessionView } from '../hooks/use-session-view';
 import SessionTitleField from './session-title-field';
+import SessionAttendeesField from './session-attendees-field';
+import { useAppMode } from '@/config/app-branding';
 import { toast } from 'sonner';
 import ConfirmationDialog from '@/shared-components/dialog/confirmation-dialog';
 
@@ -62,6 +64,8 @@ const SessionHeader = ({
   const sessionConfig = useVoice2RxStore((s) => s.sessionV2ContentById[sessionId]?.session_config);
   const templateNameById = useVoice2RxStore((s) => s.templateNameById);
   const createdAt = useVoice2RxStore((s) => s.sessionV2ContentById[sessionId]?.created_at || '');
+  // Attendees are a medical-mode concept; general deployments don't show the field.
+  const isMedicalMode = useAppMode() === 'medical';
 
   // Lifecycle handlers from hook
   const {
@@ -133,18 +137,28 @@ const SessionHeader = ({
   return (
     <div className="grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto] items-start gap-2 w-full p-4">
       {/* 1. Session title — full width on mobile, col 1 on desktop */}
-      <div className="col-span-2 sm:col-span-1 w-full sm:w-auto min-w-0 flex items-center gap-2">
-        {/* sm:flex-none (not flex-1) so the model selector sits right beside
-            the title box instead of being pushed to the far edge */}
-        <div className="flex-1 sm:flex-none min-w-0">
-          <SessionTitleField
-            sessionId={sessionId}
-            disabled={phase === SESSION_PHASE.PROCESSING || !!isLimitExceeded}
-          />
+      <div className="col-span-2 sm:col-span-1 w-full sm:w-auto min-w-0 flex flex-col gap-1">
+        <div className="flex items-center gap-2 w-full min-w-0">
+          {/* sm:flex-none (not flex-1) so the model selector sits right beside
+              the title box instead of being pushed to the far edge */}
+          <div className="flex-1 sm:flex-none min-w-0">
+            <SessionTitleField
+              sessionId={sessionId}
+              disabled={phase === SESSION_PHASE.PROCESSING || !!isLimitExceeded}
+            />
+          </div>
+          {isOutput && (
+            <div className="sm:hidden shrink-0">
+              <DownloadAudioButton sessionID={sessionId} />
+            </div>
+          )}
         </div>
-        {isOutput && (
-          <div className="sm:hidden shrink-0">
-            <DownloadAudioButton sessionID={sessionId} />
+        {isMedicalMode && (
+          <div className="w-full sm:w-72 min-w-0">
+            <SessionAttendeesField
+              sessionId={sessionId}
+              disabled={phase === SESSION_PHASE.PROCESSING || !!isLimitExceeded}
+            />
           </div>
         )}
       </div>

@@ -96,10 +96,8 @@ const ProtectedRouteGuard = ({ children }: Props) => {
     if (pathname === '/' && !entryResolvedRef.current) {
       entryResolvedRef.current = true;
       (async () => {
-        // Re-read rather than close over: resolving the latest session takes a
-        // couple of round trips, and a session can be created underneath us in
-        // the meantime (a partner handoff does exactly this). Landing the user
-        // on their previous session then would strand them away from the live one.
+        // Re-read rather than close over: a session can be created underneath us
+        // while this resolves (a partner handoff does exactly that).
         const hasOngoing = () =>
           Boolean(useVoice2RxStore.getState().sessionV2Ongoing.recording_session_id);
 

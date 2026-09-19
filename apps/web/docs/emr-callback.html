@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<title>EMR callback — notes received</title>
+<style>
+  body { font: 15px/1.6 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
+  .wrap { max-width: 860px; margin: 48px auto; padding: 0 20px; }
+  .card { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .muted { color: #666; font-size: 13px; }
+  .row { display: flex; gap: 12px; align-items: baseline; margin-top: 10px; }
+  .k { color: #888; width: 110px; flex: none; font-size: 13px; }
+  a { color: #1a6ef5; word-break: break-all; }
+  pre { background: #0d1117; color: #3fb950; padding: 12px; border-radius: 8px;
+        overflow: auto; white-space: pre-wrap; font: 12px/1.6 ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Notes received</h1>
+    <div class="muted">Scribe opened this page after the doctor published. In a real EMR this
+    is where you would fetch each <code>doc_url</code> <b>server-side</b> and file it against
+    the encounter.</div>
+    <div id="fields"></div>
+    <h3 style="font-size:15px;margin:22px 0 8px">Raw query string</h3>
+    <pre id="raw"></pre>
+  </div>
+</div>
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var sessionId = params.get('session_id');
+  var docUrls = params.getAll('doc_url');
+  var docIds = params.getAll('document_id');
+
+  var out = [];
+  out.push('<div class="row"><div class="k">session_id</div><div>' +
+           (sessionId || '<i>missing</i>') + '</div></div>');
+  if (!docUrls.length) {
+    out.push('<div class="row"><div class="k">documents</div><div><i>none</i></div></div>');
+  }
+  docUrls.forEach(function (u, i) {
+    out.push('<div class="row"><div class="k">doc ' + (i + 1) +
+             (docIds[i] ? ' (' + docIds[i] + ')' : '') +
+             '</div><div><a href="' + u + '" target="_blank" rel="noopener">' + u + '</a></div></div>');
+  });
+  document.getElementById('fields').innerHTML = out.join('');
+  document.getElementById('raw').textContent = window.location.search || '(empty)';
+</script>
+</body>
+</html>

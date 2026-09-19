@@ -8,6 +8,7 @@ import { getSDK } from '@/features/session/services/sdk-provider';
 import useVoice2RxStore from '@/store/store';
 import { isPartnerConnected, publishToPartner } from '../handoff-channel';
 import { buildPartnerPublishPayload } from '../utils/build-publish-payload';
+import { buildPartnerCallbackUrl, getPartnerCallbackUrl } from '../utils/build-callback-url';
 import { getPartnerContext } from '../utils/partner-context';
 
 // The session PATCH replaces additional_data wholesale, so merge rather than send alone.
@@ -36,6 +37,11 @@ export function usePublishToPartner(sessionId: string) {
   const publishedAt = useVoice2RxStore(
     (s) => getPartnerContext(s.sessionV2ContentById[sessionId])?.published_at ?? 0
   );
+  // Lives in additional_data, so it survives a reload and is still there when an
+  // older session is opened and published days later.
+  const callbackUrl = useVoice2RxStore((s) =>
+    getPartnerCallbackUrl(s.sessionV2ContentById[sessionId]?.additional_data)
+  );
 
   const [isPublishing, setIsPublishing] = useState(false);
   // setState lands a render too late to stop a double click.
@@ -47,32 +53,63 @@ export function usePublishToPartner(sessionId: string) {
       inFlightRef.current = true;
       setIsPublishing(true);
 
+      // Open the tab now, while the click still counts as a user gesture — a
+      // window.open after the awaits below reads as programmatic and gets blocked.
+      const redirectWindow = callbackUrl ? window.open('', '_blank') : null;
+      let handedOff = false;
+
       try {
+        await flushPendingEdits?.();
+        const documents = await buildPartnerPublishPayload(sessionId);
+
+        if (callbackUrl) {
+          const target = buildPartnerCallbackUrl(callbackUrl, sessionId, documents);
+          if (!target) {
+            toast.error('The app that started this session gave an invalid callback URL.');
+            return;
+          }
+          if (redirectWindow) {
+            redirectWindow.location.href = target;
+          } else if (!window.open(target, '_blank')) {
+            // Both attempts blocked — say so instead of appearing to do nothing.
+            toast.error('Allow pop-ups for this site to send the notes back.');
+            return;
+          }
+          handedOff = true;
+          markPublished(sessionId);
+          toast.success('Notes published.');
+          return;
+        }
+
+        // No callback url — fall back to the live postMessage channel.
         if (!isPartnerConnected()) {
           toast.error('Not connected to the app that started this session.');
           return;
         }
-
-        await flushPendingEdits?.();
-
-        const documents = await buildPartnerPublishPayload(sessionId);
         if (!publishToPartner(sessionId, documents)) {
           toast.error('Could not send the notes back. Please try again.');
           return;
         }
-
         markPublished(sessionId);
         toast.success('Notes published.');
       } catch (error) {
         console.error('[partner-session] publish failed:', error);
         toast.error('Could not send the notes back. Please try again.');
       } finally {
+        // Don't strand an empty tab if we never navigated it.
+        if (redirectWindow && !handedOff) {
+          try {
+            redirectWindow.close();
+          } catch {
+            // already gone
+          }
+        }
         inFlightRef.current = false;
         setIsPublishing(false);
       }
     },
-    [sessionId]
+    [sessionId, callbackUrl]
   );
 
-  return { isPartnerSession, isPublishing, publishedAt, publish };
+  return { isPartnerSession, isPublishing, publishedAt, publish, callbackUrl };
 }
